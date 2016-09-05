@@ -61,6 +61,7 @@ var allInterfaces = []interfaces.Interface{
 	NewTpmInterface(),
 	NewUnity7Interface(),
 	NewUPowerObserveInterface(),
+	NewUPowerControlInterface(),
 	NewX11Interface(),
 	NewOpenglInterface(),
 	NewCupsControlInterface(),
