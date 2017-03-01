@@ -85,6 +85,7 @@ fi
 func (s *backendSuite) SetUpTest(c *C) {
 	s.Backend = &apparmor.Backend{}
 	s.BackendSuite.SetUpTest(c)
+	c.Assert(s.Repo.AddBackend(s.Backend), IsNil)
 
 	// Prepare a directory for apparmor profiles.
 	// NOTE: Normally this is a part of the OS snap.
@@ -377,11 +378,11 @@ func (s *backendSuite) TestCombineSnippets(c *C) {
 		"}\n"))
 	defer restoreClassicTemplate()
 	for _, scenario := range combineSnippetsScenarios {
-		s.Iface.PermanentSlotSnippetCallback = func(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
+		s.Iface.AppArmorPermanentSlotCallback = func(spec *apparmor.Specification, slot *interfaces.Slot) error {
 			if scenario.snippet == "" {
-				return nil, nil
+				return nil
 			}
-			return []byte(scenario.snippet), nil
+			return spec.AddSnippet([]byte(scenario.snippet))
 		}
 		snapInfo := s.InstallSnap(c, scenario.opts, ifacetest.SambaYamlV1, 1)
 		profile := filepath.Join(dirs.SnapAppArmorDir, "snap.samba.smbd")
