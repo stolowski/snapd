@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 )
 
 /* The methods: allowGSMDownload, createMmsDownload, exit and setDefaultThrottle
@@ -198,36 +199,36 @@ func (iface *UbuntuDownloadManagerInterface) PermanentPlugSnippet(plug *interfac
 	return nil, nil
 }
 
+func (iface *UbuntuDownloadManagerInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###SLOT_SECURITY_TAGS###")
+	new := slotAppLabelExpr(slot)
+	snippet := bytes.Replace([]byte(downloadConnectedPlugAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *UbuntuDownloadManagerInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###SLOT_SECURITY_TAGS###")
-		new := slotAppLabelExpr(slot)
-		snippet := bytes.Replace([]byte(downloadConnectedPlugAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
+}
+
+func (iface *UbuntuDownloadManagerInterface) AppArmorPermanentSlot(spec *apparmor.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(downloadPermanentSlotAppArmor))
 }
 
 func (iface *UbuntuDownloadManagerInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(downloadPermanentSlotAppArmor), nil
-	}
 	return nil, nil
 }
 
+func (iface *UbuntuDownloadManagerInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := bytes.Replace([]byte(downloadConnectedSlotAppArmor), old, new, -1)
+	old = []byte("###PLUG_NAME###")
+	new = []byte(plug.Snap.Name())
+	snippet = bytes.Replace(snippet, old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *UbuntuDownloadManagerInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := bytes.Replace([]byte(downloadConnectedSlotAppArmor), old, new, -1)
-		old = []byte("###PLUG_NAME###")
-		new = []byte(plug.Snap.Name())
-		snippet = bytes.Replace(snippet, old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 

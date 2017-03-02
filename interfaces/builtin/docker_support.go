@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 )
 
 const dockerSupportConnectedPlugAppArmor = `
@@ -528,15 +529,18 @@ func (iface *DockerSupportInterface) PermanentPlugSnippet(plug *interfaces.Plug,
 	return nil, nil
 }
 
+func (iface *DockerSupportInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	privileged, _ := plug.Attrs["privileged-containers"].(bool)
+	snippet := []byte(dockerSupportConnectedPlugAppArmor)
+	if privileged {
+		snippet = append(snippet, dockerSupportPrivilegedAppArmor...)
+	}
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *DockerSupportInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	privileged, _ := plug.Attrs["privileged-containers"].(bool)
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		snippet := []byte(dockerSupportConnectedPlugAppArmor)
-		if privileged {
-			snippet = append(snippet, dockerSupportPrivilegedAppArmor...)
-		}
-		return snippet, nil
 	case interfaces.SecuritySecComp:
 		snippet := []byte(dockerSupportConnectedPlugSecComp)
 		if privileged {

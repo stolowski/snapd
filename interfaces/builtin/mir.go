@@ -23,6 +23,7 @@ import (
 	"bytes"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 )
 
 const mirPermanentSlotAppArmor = `
@@ -79,23 +80,32 @@ func (iface *MirInterface) PermanentPlugSnippet(plug *interfaces.Plug, securityS
 	return nil, nil
 }
 
+func (iface *MirInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###SLOT_SECURITY_TAGS###")
+	new := slotAppLabelExpr(slot)
+	snippet := bytes.Replace([]byte(mirConnectedPlugAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
+func (iface *MirInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := bytes.Replace([]byte(mirConnectedSlotAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *MirInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###SLOT_SECURITY_TAGS###")
-		new := slotAppLabelExpr(slot)
-		snippet := bytes.Replace([]byte(mirConnectedPlugAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
+}
+
+func (iface *MirInterface) AppArmorPermanentSlot(spec *apparmor.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(mirPermanentSlotAppArmor))
 }
 
 func (iface *MirInterface) PermanentSlotSnippet(
 	slot *interfaces.Slot,
 	securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(mirPermanentSlotAppArmor), nil
 	case interfaces.SecuritySecComp:
 		return []byte(mirPermanentSlotSecComp), nil
 	}
@@ -103,13 +113,6 @@ func (iface *MirInterface) PermanentSlotSnippet(
 }
 
 func (iface *MirInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := bytes.Replace([]byte(mirConnectedSlotAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 

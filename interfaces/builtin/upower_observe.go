@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/release"
 	"github.com/snapcore/snapd/snap"
 )
@@ -200,41 +201,43 @@ func (iface *UpowerObserveInterface) PermanentPlugSnippet(plug *interfaces.Plug,
 	return nil, nil
 }
 
-func (iface *UpowerObserveInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###SLOT_SECURITY_TAGS###")
-		new := slotAppLabelExpr(slot)
-		if release.OnClassic {
-			// Let confined apps access unconfined upower on classic
-			new = []byte("unconfined")
-		}
-		snippet := bytes.Replace([]byte(upowerObserveConnectedPlugAppArmor), old, new, -1)
-		return snippet, nil
+func (iface *UpowerObserveInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###SLOT_SECURITY_TAGS###")
+	new := slotAppLabelExpr(slot)
+	if release.OnClassic {
+		// Let confined apps access unconfined upower on classic
+		new = []byte("unconfined")
 	}
+	snippet := bytes.Replace([]byte(upowerObserveConnectedPlugAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
+func (iface *UpowerObserveInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	return nil, nil
+}
+
+func (iface *UpowerObserveInterface) AppArmorPermanentSlot(spec *apparmor.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(upowerObservePermanentSlotAppArmor))
 }
 
 func (iface *UpowerObserveInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
 	case interfaces.SecurityDBus:
 		return []byte(upowerObservePermanentSlotDBus), nil
-	case interfaces.SecurityAppArmor:
-		return []byte(upowerObservePermanentSlotAppArmor), nil
 	case interfaces.SecuritySecComp:
 		return []byte(upowerObservePermanentSlotSeccomp), nil
 	}
 	return nil, nil
 }
 
+func (iface *UpowerObserveInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := bytes.Replace([]byte(upowerObserveConnectedSlotAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *UpowerObserveInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := bytes.Replace([]byte(upowerObserveConnectedSlotAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 

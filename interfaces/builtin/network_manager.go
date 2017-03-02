@@ -23,6 +23,7 @@ import (
 	"bytes"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -375,30 +376,30 @@ func (iface *NetworkManagerInterface) PermanentPlugSnippet(plug *interfaces.Plug
 	return nil, nil
 }
 
-func (iface *NetworkManagerInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityDBus:
-		return nil, nil
-	case interfaces.SecurityAppArmor:
-		old := []byte("###SLOT_SECURITY_TAGS###")
-		var new []byte
-		if release.OnClassic {
-			// If we're running on classic NetworkManager will be part
-			// of the OS snap and will run unconfined.
-			new = []byte("unconfined")
-		} else {
-			new = slotAppLabelExpr(slot)
-		}
-		snippet := bytes.Replace([]byte(networkManagerConnectedPlugAppArmor), old, new, -1)
-		return snippet, nil
+func (iface *NetworkManagerInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###SLOT_SECURITY_TAGS###")
+	var new []byte
+	if release.OnClassic {
+		// If we're running on classic NetworkManager will be part
+		// of the OS snap and will run unconfined.
+		new = []byte("unconfined")
+	} else {
+		new = slotAppLabelExpr(slot)
 	}
+	snippet := bytes.Replace([]byte(networkManagerConnectedPlugAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
+func (iface *NetworkManagerInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	return nil, nil
+}
+
+func (iface *NetworkManagerInterface) AppArmorPermanentSlot(spec *apparmor.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(networkManagerPermanentSlotAppArmor))
 }
 
 func (iface *NetworkManagerInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(networkManagerPermanentSlotAppArmor), nil
 	case interfaces.SecuritySecComp:
 		return []byte(networkManagerPermanentSlotSecComp), nil
 	case interfaces.SecurityDBus:

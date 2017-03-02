@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 )
 
 const lxdConnectedPlugAppArmor = `
@@ -49,10 +50,12 @@ func (iface *LxdInterface) PermanentPlugSnippet(plug *interfaces.Plug, securityS
 	return nil, nil
 }
 
+func (iface *LxdInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(lxdConnectedPlugAppArmor))
+}
+
 func (iface *LxdInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(lxdConnectedPlugAppArmor), nil
 	case interfaces.SecuritySecComp:
 		return []byte(lxdConnectedPlugSecComp), nil
 	}

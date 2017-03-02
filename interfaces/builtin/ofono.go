@@ -23,6 +23,7 @@ import (
 	"bytes"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -242,25 +243,28 @@ func (iface *OfonoInterface) PermanentPlugSnippet(plug *interfaces.Plug, securit
 	return nil, nil
 }
 
-func (iface *OfonoInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###SLOT_SECURITY_TAGS###")
-		new := slotAppLabelExpr(slot)
-		snippet := bytes.Replace([]byte(ofonoConnectedPlugAppArmor), old, new, -1)
-		if release.OnClassic {
-			// Let confined apps access unconfined ofono on classic
-			snippet = append(snippet, ofonoConnectedPlugAppArmorClassic...)
-		}
-		return snippet, nil
+func (iface *OfonoInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###SLOT_SECURITY_TAGS###")
+	new := slotAppLabelExpr(slot)
+	snippet := bytes.Replace([]byte(ofonoConnectedPlugAppArmor), old, new, -1)
+	if release.OnClassic {
+		// Let confined apps access unconfined ofono on classic
+		snippet = append(snippet, ofonoConnectedPlugAppArmorClassic...)
 	}
+	return spec.AddSnippet(snippet)
+
+}
+
+func (iface *OfonoInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	return nil, nil
+}
+
+func (iface *OfonoInterface) AppArmorPermanentSlot(spec *apparmor.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(ofonoPermanentSlotAppArmor))
 }
 
 func (iface *OfonoInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(ofonoPermanentSlotAppArmor), nil
 	case interfaces.SecuritySecComp:
 		return []byte(ofonoPermanentSlotSecComp), nil
 	case interfaces.SecurityUDev:
@@ -271,14 +275,14 @@ func (iface *OfonoInterface) PermanentSlotSnippet(slot *interfaces.Slot, securit
 	return nil, nil
 }
 
+func (iface *OfonoInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := bytes.Replace([]byte(ofonoConnectedSlotAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *OfonoInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := bytes.Replace([]byte(ofonoConnectedSlotAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 

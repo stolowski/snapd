@@ -21,6 +21,7 @@ package builtin
 
 import (
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 )
 
 const pppConnectedPlugAppArmor = `
@@ -59,10 +60,12 @@ func (iface *PppInterface) PermanentPlugSnippet(plug *interfaces.Plug, securityS
 	return nil, nil
 }
 
+func (iface *PppInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(pppConnectedPlugAppArmor))
+}
+
 func (iface *PppInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(pppConnectedPlugAppArmor), nil
 	case interfaces.SecurityKMod:
 		return pppConnectedPlugKmod, nil
 	}

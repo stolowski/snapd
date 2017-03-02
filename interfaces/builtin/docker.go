@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 )
 
 const dockerConnectedPlugAppArmor = `
@@ -50,11 +51,13 @@ func (iface *DockerInterface) PermanentPlugSnippet(plug *interfaces.Plug, securi
 	return nil, nil
 }
 
+func (iface *DockerInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	snippet := []byte(dockerConnectedPlugAppArmor)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *DockerInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		snippet := []byte(dockerConnectedPlugAppArmor)
-		return snippet, nil
 	case interfaces.SecuritySecComp:
 		snippet := []byte(dockerConnectedPlugSecComp)
 		return snippet, nil

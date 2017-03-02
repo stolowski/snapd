@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -107,34 +108,35 @@ func (iface *unity8PimCommonInterface) PermanentPlugSnippet(plug *interfaces.Plu
 	return nil, nil
 }
 
-func (iface *unity8PimCommonInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###SLOT_SECURITY_TAGS###")
-		new := slotAppLabelExpr(slot)
+func (iface *unity8PimCommonInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###SLOT_SECURITY_TAGS###")
+	new := slotAppLabelExpr(slot)
 
-		originalSnippet := append([]byte(unity8PimCommonConnectedPlugAppArmor), iface.connectedPlugAppArmor...)
-		snippet := bytes.Replace(originalSnippet, old, new, -1)
+	originalSnippet := append([]byte(unity8PimCommonConnectedPlugAppArmor), iface.connectedPlugAppArmor...)
+	snippet := bytes.Replace(originalSnippet, old, new, -1)
 
-		// classic mode
-		if release.OnClassic {
-			// Let confined apps access unconfined service on classic
-			classicSnippet := bytes.Replace(originalSnippet, old, []byte("unconfined"), -1)
-			snippet = append(snippet, classicSnippet...)
-		}
-
-		return snippet, nil
-	default:
-		return nil, nil
+	// classic mode
+	if release.OnClassic {
+		// Let confined apps access unconfined service on classic
+		classicSnippet := bytes.Replace(originalSnippet, old, []byte("unconfined"), -1)
+		snippet = append(snippet, classicSnippet...)
 	}
+
+	return spec.AddSnippet(snippet)
+}
+
+func (iface *unity8PimCommonInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
+	return nil, nil
+}
+
+func (iface *unity8PimCommonInterface) AppArmorPermanentSlot(spec *apparmor.Specification, slot *interfaces.Slot) error {
+	snippet := []byte(unity8PimCommonPermanentSlotAppArmor)
+	snippet = append(snippet, iface.permanentSlotAppArmor...)
+	return spec.AddSnippet(snippet)
 }
 
 func (iface *unity8PimCommonInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		snippet := []byte(unity8PimCommonPermanentSlotAppArmor)
-		snippet = append(snippet, iface.permanentSlotAppArmor...)
-		return snippet, nil
 	case interfaces.SecuritySecComp:
 		return []byte(unity8PimCommonPermanentSlotSecComp), nil
 	case interfaces.SecurityDBus:
@@ -145,16 +147,16 @@ func (iface *unity8PimCommonInterface) PermanentSlotSnippet(slot *interfaces.Slo
 	}
 }
 
+func (iface *unity8PimCommonInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := []byte(unity8PimCommonConnectedSlotAppArmor)
+	snippet = append(snippet, iface.connectedSlotAppArmor...)
+	snippet = bytes.Replace(snippet, old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *unity8PimCommonInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := []byte(unity8PimCommonConnectedSlotAppArmor)
-		snippet = append(snippet, iface.connectedSlotAppArmor...)
-		snippet = bytes.Replace(snippet, old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 

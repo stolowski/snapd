@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 )
 
 const ioPortsControlConnectedPlugAppArmor = `
@@ -86,12 +87,13 @@ func (iface *IioPortsControlInterface) PermanentSlotSnippet(slot *interfaces.Slo
 	return nil, nil
 }
 
+func (iface *IioPortsControlInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(ioPortsControlConnectedPlugAppArmor))
+}
+
 // Getter for the security snippet specific to the plug
 func (iface *IioPortsControlInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(ioPortsControlConnectedPlugAppArmor), nil
-
 	case interfaces.SecuritySecComp:
 		return []byte(ioPortsControlConnectedPlugSecComp), nil
 

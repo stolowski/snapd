@@ -23,6 +23,7 @@ import (
 	"bytes"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -1159,27 +1160,31 @@ func (iface *ModemManagerInterface) PermanentPlugSnippet(plug *interfaces.Plug, 
 	return nil, nil
 }
 
+func (iface *ModemManagerInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###SLOT_SECURITY_TAGS###")
+	new := slotAppLabelExpr(slot)
+	snippet := bytes.Replace([]byte(modemManagerConnectedPlugAppArmor), old, new, -1)
+	if release.OnClassic {
+		// Let confined apps access unconfined ofono on classic
+		snippet = append(snippet, modemManagerConnectedPlugAppArmorClassic...)
+	}
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *ModemManagerInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
 	case interfaces.SecurityDBus:
 		return []byte(modemManagerConnectedPlugDBus), nil
-	case interfaces.SecurityAppArmor:
-		old := []byte("###SLOT_SECURITY_TAGS###")
-		new := slotAppLabelExpr(slot)
-		snippet := bytes.Replace([]byte(modemManagerConnectedPlugAppArmor), old, new, -1)
-		if release.OnClassic {
-			// Let confined apps access unconfined ofono on classic
-			snippet = append(snippet, modemManagerConnectedPlugAppArmorClassic...)
-		}
-		return snippet, nil
 	}
 	return nil, nil
 }
 
+func (iface *ModemManagerInterface) AppArmorPermanentSlot(spec *apparmor.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet([]byte(modemManagerPermanentSlotAppArmor))
+}
+
 func (iface *ModemManagerInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		return []byte(modemManagerPermanentSlotAppArmor), nil
 	case interfaces.SecuritySecComp:
 		return []byte(modemManagerPermanentSlotSecComp), nil
 	case interfaces.SecurityUDev:
@@ -1190,14 +1195,14 @@ func (iface *ModemManagerInterface) PermanentSlotSnippet(slot *interfaces.Slot, 
 	return nil, nil
 }
 
+func (iface *ModemManagerInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := bytes.Replace([]byte(modemManagerConnectedSlotAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *ModemManagerInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := bytes.Replace([]byte(modemManagerConnectedSlotAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 
