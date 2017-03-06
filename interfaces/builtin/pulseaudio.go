@@ -151,12 +151,6 @@ func (iface *PulseAudioInterface) SecCompPermanentSlot(spec *seccomp.Specificati
 	return spec.AddSnippet(pulseaudioPermanentSlotSecComp)
 }
 
-func (iface *PulseAudioInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	if securitySystem == interfaces.SecurityAppArmor {
-		return []byte(pulseaudioPermanentSlotAppArmor), nil
-	}
-}
-
 func (iface *PulseAudioInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	return nil, nil
 }
