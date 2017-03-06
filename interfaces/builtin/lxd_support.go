@@ -22,6 +22,7 @@ package builtin
 import (
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 )
 
 const lxdSupportConnectedPlugAppArmor = `
@@ -53,11 +54,11 @@ func (iface *LxdSupportInterface) AppArmorConnectedPlug(spec *apparmor.Specifica
 }
 
 func (iface *LxdSupportInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(lxdSupportConnectedPlugSecComp), nil
-	}
 	return nil, nil
+}
+
+func (iface *LxdSupportInterface) SecCompConnectedPlug(spec *seccomp.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	return spec.AddSnippet(lxdSupportConnectedPlugSecComp)
 }
 
 func (iface *LxdSupportInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {

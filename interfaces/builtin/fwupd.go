@@ -24,6 +24,7 @@ import (
 
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 )
 
 const fwupdPermanentSlotAppArmor = `
@@ -191,10 +192,6 @@ func (iface *FwupdInterface) AppArmorConnectedPlug(spec *apparmor.Specification,
 
 // ConnectedPlugSnippet returns security snippets for plug at connection
 func (iface *FwupdInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(fwupdConnectedPlugSecComp), nil
-	}
 	return nil, nil
 }
 
@@ -207,8 +204,6 @@ func (iface *FwupdInterface) PermanentSlotSnippet(slot *interfaces.Slot, securit
 	switch securitySystem {
 	case interfaces.SecurityDBus:
 		return []byte(fwupdPermanentSlotDBus), nil
-	case interfaces.SecuritySecComp:
-		return []byte(fwupdPermanentSlotSecComp), nil
 	}
 	return nil, nil
 }
@@ -223,6 +218,14 @@ func (iface *FwupdInterface) AppArmorConnectedSlot(spec *apparmor.Specification,
 // ConnectedSlotSnippet returns security snippets for slot at connection
 func (iface *FwupdInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	return nil, nil
+}
+
+func (iface *FwupdInterface) SecCompConnectedPlug(spec *seccomp.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	return spec.AddSnippet(fwupdConnectedPlugSecComp)
+}
+
+func (iface *FwupdInterface) SecCompPermanentSlot(spec *seccomp.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet(fwupdPermanentSlotSecComp)
 }
 
 // SanitizePlug checks the plug definition is valid

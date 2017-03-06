@@ -24,6 +24,7 @@ import (
 
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -1185,8 +1186,6 @@ func (iface *ModemManagerInterface) AppArmorPermanentSlot(spec *apparmor.Specifi
 
 func (iface *ModemManagerInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(modemManagerPermanentSlotSecComp), nil
 	case interfaces.SecurityUDev:
 		return []byte(modemManagerPermanentSlotUdev), nil
 	case interfaces.SecurityDBus:
@@ -1200,6 +1199,10 @@ func (iface *ModemManagerInterface) AppArmorConnectedSlot(spec *apparmor.Specifi
 	new := plugAppLabelExpr(plug)
 	snippet := bytes.Replace([]byte(modemManagerConnectedSlotAppArmor), old, new, -1)
 	return spec.AddSnippet(snippet)
+}
+
+func (iface *ModemManagerInterface) SecCompPermanentSlot(spec *seccomp.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet(modemManagerPermanentSlotSecComp)
 }
 
 func (iface *ModemManagerInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {

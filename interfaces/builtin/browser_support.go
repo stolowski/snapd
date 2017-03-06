@@ -24,6 +24,7 @@ import (
 
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 )
 
 // http://bazaar.launchpad.net/~ubuntu-security/ubuntu-core-security/trunk/view/head:/data/apparmor/policygroups/ubuntu-core/16.04/log-observe
@@ -270,17 +271,16 @@ func (iface *BrowserSupportInterface) AppArmorConnectedPlug(spec *apparmor.Speci
 }
 
 func (iface *BrowserSupportInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	allowSandbox, _ := plug.Attrs["allow-sandbox"].(bool)
-
-	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		snippet := []byte(browserSupportConnectedPlugSecComp)
-		if allowSandbox {
-			snippet = append(snippet, browserSupportConnectedPlugSecCompWithSandbox...)
-		}
-		return snippet, nil
-	}
 	return nil, nil
+}
+
+func (iface *BrowserSupportInterface) SecCompConnectedPlug(spec *seccomp.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	allowSandbox, _ := plug.Attrs["allow-sandbox"].(bool)
+	snippet := browserSupportConnectedPlugSecComp
+	if allowSandbox {
+		snippet += browserSupportConnectedPlugSecCompWithSandbox
+	}
+	return spec.AddSnippet(snippet)
 }
 
 func (iface *BrowserSupportInterface) PermanentPlugSnippet(plug *interfaces.Plug, securitySystem interfaces.SecuritySystem) ([]byte, error) {

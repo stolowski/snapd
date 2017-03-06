@@ -24,6 +24,7 @@ import (
 
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -265,8 +266,6 @@ func (iface *OfonoInterface) AppArmorPermanentSlot(spec *apparmor.Specification,
 
 func (iface *OfonoInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(ofonoPermanentSlotSecComp), nil
 	case interfaces.SecurityUDev:
 		return []byte(ofonoPermanentSlotUdev), nil
 	case interfaces.SecurityDBus:
@@ -280,6 +279,10 @@ func (iface *OfonoInterface) AppArmorConnectedSlot(spec *apparmor.Specification,
 	new := plugAppLabelExpr(plug)
 	snippet := bytes.Replace([]byte(ofonoConnectedSlotAppArmor), old, new, -1)
 	return spec.AddSnippet(snippet)
+}
+
+func (iface *OfonoInterface) SecCompPermanentSlot(spec *seccomp.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet(ofonoPermanentSlotSecComp)
 }
 
 func (iface *OfonoInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {

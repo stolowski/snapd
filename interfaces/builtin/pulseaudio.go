@@ -24,6 +24,7 @@ import (
 
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -131,10 +132,6 @@ func (iface *PulseAudioInterface) AppArmorConnectedPlug(spec *apparmor.Specifica
 }
 
 func (iface *PulseAudioInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(pulseaudioConnectedPlugSecComp), nil
-	}
 	return nil, nil
 }
 
@@ -143,11 +140,21 @@ func (iface *PulseAudioInterface) AppArmorPermanentSlot(spec *apparmor.Specifica
 }
 
 func (iface *PulseAudioInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(pulseaudioPermanentSlotSecComp), nil
-	}
 	return nil, nil
+}
+
+func (iface *PulseAudioInterface) SecCompConnectedPlug(spec *seccomp.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	return spec.AddSnippet(pulseaudioConnectedPlugSecComp)
+}
+
+func (iface *PulseAudioInterface) SecCompPermanentSlot(spec *seccomp.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet(pulseaudioPermanentSlotSecComp)
+}
+
+func (iface *PulseAudioInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
+	if securitySystem == interfaces.SecurityAppArmor {
+		return []byte(pulseaudioPermanentSlotAppArmor), nil
+	}
 }
 
 func (iface *PulseAudioInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {

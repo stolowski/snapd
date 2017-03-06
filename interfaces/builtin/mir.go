@@ -24,6 +24,7 @@ import (
 
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 )
 
 const mirPermanentSlotAppArmor = `
@@ -105,11 +106,11 @@ func (iface *MirInterface) AppArmorPermanentSlot(spec *apparmor.Specification, s
 func (iface *MirInterface) PermanentSlotSnippet(
 	slot *interfaces.Slot,
 	securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(mirPermanentSlotSecComp), nil
-	}
 	return nil, nil
+}
+
+func (iface *MirInterface) SecCompPermanentSlot(spec *seccomp.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet(mirPermanentSlotSecComp)
 }
 
 func (iface *MirInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {

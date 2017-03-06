@@ -25,6 +25,7 @@ import (
 
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/release"
 )
 
@@ -137,8 +138,6 @@ func (iface *unity8PimCommonInterface) AppArmorPermanentSlot(spec *apparmor.Spec
 
 func (iface *unity8PimCommonInterface) PermanentSlotSnippet(slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	switch securitySystem {
-	case interfaces.SecuritySecComp:
-		return []byte(unity8PimCommonPermanentSlotSecComp), nil
 	case interfaces.SecurityDBus:
 		//FIXME: Implement support after session services are available.
 		return nil, nil
@@ -154,6 +153,10 @@ func (iface *unity8PimCommonInterface) AppArmorConnectedSlot(spec *apparmor.Spec
 	snippet = append(snippet, iface.connectedSlotAppArmor...)
 	snippet = bytes.Replace(snippet, old, new, -1)
 	return spec.AddSnippet(snippet)
+}
+
+func (iface *unity8PimCommonInterface) SecCompPermanentSlot(spec *seccomp.Specification, slot *interfaces.Slot) error {
+	return spec.AddSnippet(unity8PimCommonPermanentSlotSecComp)
 }
 
 func (iface *unity8PimCommonInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
