@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/snap"
@@ -71,9 +72,10 @@ func (s *DockerSupportInterfaceSuite) TestName(c *C) {
 
 func (s *DockerSupportInterfaceSuite) TestUsedSecuritySystems(c *C) {
 	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	c.Assert(apparmorSpec.Snippets(), HasLen, 1)
 
 	// connected plugs have a non-nil security snippet for seccomp
 	seccompSpec := &seccomp.Specification{}
@@ -83,16 +85,20 @@ func (s *DockerSupportInterfaceSuite) TestUsedSecuritySystems(c *C) {
 }
 
 func (s *DockerSupportInterfaceSuite) TestConnectedPlugSnippet(c *C) {
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), testutil.Contains, `pivot_root`)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.docker.app"], HasLen, 1)
+	c.Assert(string(aasnippets["snap.docker.app"][0]), testutil.Contains, `pivot_root`)
 
 	seccompSpec := &seccomp.Specification{}
 	err = seccompSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
 	snippets := seccompSpec.Snippets()
-	c.Assert(len(snippets), Equals, 1)
-	c.Assert(len(snippets["snap.docker.app"]), Equals, 1)
+	c.Assert(snippets, HasLen, 1)
+	c.Assert(snippets["snap.docker.app"], HasLen, 1)
 	c.Check(string(snippets["snap.docker.app"][0]), testutil.Contains, "pivot_root\n")
 }
 
@@ -127,9 +133,13 @@ apps:
 	err = s.iface.SanitizePlug(plug)
 	c.Assert(err, IsNil)
 
-	snippet, err := s.iface.ConnectedPlugSnippet(plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err = apparmorSpec.AddConnectedPlug(s.iface, plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), testutil.Contains, `change_profile -> *,`)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.docker.app"], HasLen, 1)
+	c.Assert(string(aasnippets["snap.docker.app"][0]), testutil.Contains, `change_profile -> *,`)
 
 	seccompSpec := &seccomp.Specification{}
 	err = seccompSpec.AddConnectedPlug(s.iface, plug, s.slot)
