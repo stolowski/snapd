@@ -192,6 +192,13 @@ func (iface *BluezInterface) AppArmorConnectedPlug(spec *apparmor.Specification,
 	return spec.AddSnippet(snippet)
 }
 
+func (iface *BluezInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := bytes.Replace([]byte(bluezConnectedSlotAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *BluezInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	return nil, nil
 }
@@ -213,13 +220,6 @@ func (iface *BluezInterface) SecCompPermanentSlot(spec *seccomp.Specification, s
 }
 
 func (iface *BluezInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := bytes.Replace([]byte(bluezConnectedSlotAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 

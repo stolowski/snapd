@@ -150,11 +150,13 @@ func (s *BluezInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelOne(c *C) {
 }
 
 func (s *BluezInterfaceSuite) TestConnectedSlotSnippetAppArmor(c *C) {
-	snippet, err := s.iface.ConnectedSlotSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedSlot(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-
-	c.Check(string(snippet), testutil.Contains, `peer=(label="snap.other.app2")`)
+	snippets := apparmorSpec.Snippets()
+	c.Assert(len(snippets), Equals, 1)
+	c.Assert(len(snippets["snap.bluez.app1"]), Equals, 1)
+	c.Assert(string(snippets["snap.bluez.app1"][0]), testutil.Contains, `peer=(label="snap.other.app2")`)
 }
 
 func (s *BluezInterfaceSuite) TestUsedSecuritySystems(c *C) {
