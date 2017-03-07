@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/snap"
@@ -92,15 +93,18 @@ func (s *AutopilotInterfaceSuite) TestSanitizeIncorrectInterface(c *C) {
 
 func (s *AutopilotInterfaceSuite) TestUsedSecuritySystems(c *C) {
 	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-	c.Check(string(snippet), testutil.Contains, "path=/com/canonical/Autopilot/Introspection\n")
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(len(aasnippets), Equals, 1)
+	c.Assert(len(aasnippets["snap.other.app"]), Equals, 1)
+	c.Assert(string(aasnippets["snap.other.app"][0]), testutil.Contains, "path=/com/canonical/Autopilot/Introspection\n")
+
 	// connected plugs have a non-nil security snippet for seccomp
 	seccompSpec := &seccomp.Specification{}
 	err = seccompSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
 	snippets := seccompSpec.Snippets()
 	c.Assert(len(snippets), Equals, 1)
 	c.Assert(len(snippets["snap.other.app"]), Equals, 1)
