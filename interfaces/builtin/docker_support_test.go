@@ -171,9 +171,13 @@ apps:
 	err = s.iface.SanitizePlug(plug)
 	c.Assert(err, IsNil)
 
-	snippet, err := s.iface.ConnectedPlugSnippet(plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err = apparmorSpec.AddConnectedPlug(s.iface, plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), Not(testutil.Contains), `change_profile -> *,`)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.docker.app"], HasLen, 1)
+	c.Assert(string(aasnippets["snap.docker.app"][0]), Not(testutil.Contains), `change_profile -> *,`)
 
 	seccompSpec := &seccomp.Specification{}
 	err = seccompSpec.AddConnectedPlug(s.iface, plug, s.slot)
