@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/snap"
@@ -92,9 +93,13 @@ func (s *X11InterfaceSuite) TestSanitizeIncorrectInterface(c *C) {
 
 func (s *X11InterfaceSuite) TestUsedSecuritySystems(c *C) {
 	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(len(aasnippets), Equals, 1)
+	c.Assert(len(aasnippets["snap.other.app2"]), Equals, 1)
+	c.Assert(string(aasnippets["snap.other.app2"][0]), testutil.Contains, `fontconfig`)
 }
 
 // The shutdown system call is allowed
