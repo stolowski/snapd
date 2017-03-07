@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/snap"
@@ -76,17 +77,14 @@ func (s *LxdInterfaceSuite) TestSanitizePlug(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *LxdInterfaceSuite) TestUsedSecuritySystems(c *C) {
-	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-}
-
 func (s *LxdInterfaceSuite) TestConnectedPlugSnippetAppArmor(c *C) {
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Check(string(snippet), testutil.Contains, "/var/snap/lxd/common/lxd/unix.socket rw,\n")
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(len(aasnippets), Equals, 1)
+	c.Assert(len(aasnippets["snap.lxd.app"]), Equals, 1)
+	c.Assert(string(aasnippets["snap.lxd.app"][0]), testutil.Contains, "/var/snap/lxd/common/lxd/unix.socket rw,\n")
 }
 
 func (s *LxdInterfaceSuite) TestConnectedPlugSnippetSecComp(c *C) {
