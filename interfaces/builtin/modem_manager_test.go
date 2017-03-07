@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/release"
@@ -46,6 +47,18 @@ apps:
  mm:
   command: foo
   slots:
+   - modem-manager
+`
+
+const modemmgrMockPlugSnapInfoYaml = `name: modem-manager
+version: 1.0
+plugs:
+ modem-manager:
+  interface: modem-manager
+apps:
+ mmcli:
+  command: foo
+  plugs:
    - modem-manager
 `
 
@@ -75,7 +88,7 @@ func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelAll(c 
 	slot := &interfaces.Slot{
 		SlotInfo: &snap.SlotInfo{
 			Snap: &snap.Info{
-				SuggestedName: "modem-manager",
+				SuggestedName: "modem-manager-prod",
 				Apps:          map[string]*snap.AppInfo{"app1": app1, "app2": app2},
 			},
 			Name:      "modem-manager",
@@ -84,9 +97,17 @@ func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelAll(c 
 		},
 	}
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	plugSnap := snaptest.MockInfo(c, modemmgrMockPlugSnapInfoYaml, nil)
+	plug := &interfaces.Plug{PlugInfo: plugSnap.Plugs["modem-manager"]}
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.modem-manager.*"),`)
+	snippets := apparmorSpec.Snippets()
+	c.Assert(len(snippets), Equals, 1)
+	c.Assert(len(snippets["snap.modem-manager.mmcli"]), Equals, 1)
+	c.Assert(string(snippets["snap.modem-manager.mmcli"][0]), testutil.Contains, `peer=(label="snap.modem-manager-prod.*"),`)
 }
 
 // The label uses alternation when some, but not all, apps is bound to the modem-manager slot
@@ -106,9 +127,17 @@ func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelSome(c
 		},
 	}
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	plugSnap := snaptest.MockInfo(c, modemmgrMockPlugSnapInfoYaml, nil)
+	plug := &interfaces.Plug{PlugInfo: plugSnap.Plugs["modem-manager"]}
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.modem-manager.{app1,app2}"),`)
+	snippets := apparmorSpec.Snippets()
+	c.Assert(len(snippets), Equals, 1)
+	c.Assert(len(snippets["snap.modem-manager.mmcli"]), Equals, 1)
+	c.Assert(string(snippets["snap.modem-manager.mmcli"][0]), testutil.Contains, `peer=(label="snap.modem-manager.{app1,app2}"),`)
 }
 
 // The label uses short form when exactly one app is bound to the modem-manager slot
@@ -126,9 +155,17 @@ func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelOne(c 
 		},
 	}
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	plugSnap := snaptest.MockInfo(c, modemmgrMockPlugSnapInfoYaml, nil)
+	plug := &interfaces.Plug{PlugInfo: plugSnap.Plugs["modem-manager"]}
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.modem-manager.app"),`)
+	snippets := apparmorSpec.Snippets()
+	c.Assert(len(snippets), Equals, 1)
+	c.Assert(len(snippets["snap.modem-manager.mmcli"]), Equals, 1)
+	c.Assert(string(snippets["snap.modem-manager.mmcli"][0]), testutil.Contains, `peer=(label="snap.modem-manager.app"),`)
 }
 
 func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesUnconfinedLabelNot(c *C) {
@@ -140,20 +177,27 @@ func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesUnconfinedLabel
 
 func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesUnconfinedLabelOnClassic(c *C) {
 	release.OnClassic = true
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+
+	plugSnap := snaptest.MockInfo(c, modemmgrMockPlugSnapInfoYaml, nil)
+	plug := &interfaces.Plug{PlugInfo: plugSnap.Plugs["modem-manager"]}
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), testutil.Contains, "peer=(label=unconfined),")
+	snippets := apparmorSpec.Snippets()
+	c.Assert(len(snippets), Equals, 1)
+	c.Assert(len(snippets["snap.modem-manager.mmcli"]), Equals, 1)
+	c.Assert(string(snippets["snap.modem-manager.mmcli"][0]), testutil.Contains, "peer=(label=unconfined),")
 }
 
 func (s *ModemManagerInterfaceSuite) TestUsedSecuritySystems(c *C) {
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	plugSnap := snaptest.MockInfo(c, modemmgrMockPlugSnapInfoYaml, nil)
+	plug := &interfaces.Plug{PlugInfo: plugSnap.Plugs["modem-manager"]}
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-	snippet, err = s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	c.Assert(len(apparmorSpec.Snippets()), Equals, 1)
 
-	snippet, err = s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityDBus)
+	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityDBus)
 	c.Assert(err, IsNil)
 	c.Assert(snippet, Not(IsNil))
 
