@@ -39,14 +39,10 @@ type NetworkInterfaceSuite struct {
 
 const netMockPlugSnapInfoYaml = `name: other
 version: 1.0
-plugs:
- network:
-  interface: network
 apps:
  app2:
   command: foo
-  plugs:
-   - network
+  plugs: [network]
 `
 
 var _ = Suite(&NetworkInterfaceSuite{})

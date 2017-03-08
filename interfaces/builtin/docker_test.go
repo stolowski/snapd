@@ -39,14 +39,10 @@ type DockerInterfaceSuite struct {
 
 const dockerMockPlugSnapInfoYaml = `name: docker
 version: 1.0
-plugs:
- docker-client:
-  interface: docker
 apps:
  app:
   command: foo
-  plugs:
-   - docker-client
+  plugs: [docker]
 `
 
 var _ = Suite(&DockerInterfaceSuite{})
@@ -63,7 +59,7 @@ func (s *DockerInterfaceSuite) SetUpTest(c *C) {
 		},
 	}
 	plugSnap := snaptest.MockInfo(c, dockerMockPlugSnapInfoYaml, nil)
-	s.plug = &interfaces.Plug{PlugInfo: plugSnap.Plugs["docker-client"]}
+	s.plug = &interfaces.Plug{PlugInfo: plugSnap.Plugs["docker"]}
 }
 
 func (s *DockerInterfaceSuite) TestName(c *C) {
