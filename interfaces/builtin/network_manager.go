@@ -394,6 +394,13 @@ func (iface *NetworkManagerInterface) AppArmorConnectedPlug(spec *apparmor.Speci
 	return spec.AddSnippet(snippet)
 }
 
+func (iface *NetworkManagerInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+	old := []byte("###PLUG_SECURITY_TAGS###")
+	new := plugAppLabelExpr(plug)
+	snippet := bytes.Replace([]byte(networkManagerConnectedSlotAppArmor), old, new, -1)
+	return spec.AddSnippet(snippet)
+}
+
 func (iface *NetworkManagerInterface) ConnectedPlugSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
 	return nil, nil
 }
@@ -415,13 +422,6 @@ func (iface *NetworkManagerInterface) SecCompPermanentSlot(spec *seccomp.Specifi
 }
 
 func (iface *NetworkManagerInterface) ConnectedSlotSnippet(plug *interfaces.Plug, slot *interfaces.Slot, securitySystem interfaces.SecuritySystem) ([]byte, error) {
-	switch securitySystem {
-	case interfaces.SecurityAppArmor:
-		old := []byte("###PLUG_SECURITY_TAGS###")
-		new := plugAppLabelExpr(plug)
-		snippet := bytes.Replace([]byte(networkManagerConnectedSlotAppArmor), old, new, -1)
-		return snippet, nil
-	}
 	return nil, nil
 }
 

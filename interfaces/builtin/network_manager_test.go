@@ -165,12 +165,12 @@ func (s *NetworkManagerInterfaceSuite) TestConnectedPlugSnippedUsesUnconfinedLab
 
 func (s *NetworkManagerInterfaceSuite) TestConnectedSlotSnippetAppArmor(c *C) {
 	apparmorSpec := &apparmor.Specification{}
-	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
+	err := apparmorSpec.AddConnectedSlot(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
 	aasnippets := apparmorSpec.Snippets()
-	c.Assert(len(aasnippets), Equals, 1)
-	c.Assert(len(aasnippets["snap.network-manager-client.nmcli"]), Equals, 1)
-	c.Assert(string(aasnippets["snap.network-manager-client.nmcli"][0]), testutil.Contains, `peer=(label="snap.network-manager.nm")`)
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.network-manager.nm"], HasLen, 1)
+	c.Assert(string(aasnippets["snap.network-manager.nm"][0]), testutil.Contains, `/org/freedesktop/NetworkManager`)
 }
 
 func (s *NetworkManagerInterfaceSuite) TestUsedSecuritySystems(c *C) {
