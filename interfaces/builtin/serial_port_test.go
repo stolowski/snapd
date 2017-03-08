@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/snap/snaptest"
 	"github.com/snapcore/snapd/testutil"
@@ -287,51 +288,47 @@ SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="ffff", ATTRS{idProduct}==
 }
 
 func (s *SerialPortInterfaceSuite) TestConnectedPlugAppArmorSnippets(c *C) {
+	checkConnectedPlugSnippet := func(plug *interfaces.Plug, slot *interfaces.Slot, expectedSnippet []byte) {
+		apparmorSpec := &apparmor.Specification{}
+		err := apparmorSpec.AddConnectedPlug(s.iface, plug, slot)
+		c.Assert(err, IsNil)
+		snippets := apparmorSpec.Snippets()
+		c.Assert(snippets, HasLen, 1)
+		c.Assert(snippets["snap.client-snap.app-accessing-2-ports"], HasLen, 1)
+		snippet := snippets["snap.client-snap.app-accessing-2-ports"][0]
+		c.Assert(snippet, DeepEquals, expectedSnippet, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet, snippet))
+	}
+
 	expectedSnippet1 := []byte(`/dev/ttyS0 rw,
 `)
-	snippet, err := s.iface.ConnectedPlugSnippet(s.testPlugPort1, s.testSlot1, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet1, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet1, snippet))
-
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testSlot1, expectedSnippet1)
 	expectedSnippet2 := []byte(`/dev/ttyUSB927 rw,
 `)
-	snippet, err = s.iface.ConnectedPlugSnippet(s.testPlugPort1, s.testSlot2, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet2, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet2, snippet))
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testSlot2, expectedSnippet2)
 
 	expectedSnippet3 := []byte(`/dev/ttyS42 rw,
 `)
-	snippet, err = s.iface.ConnectedPlugSnippet(s.testPlugPort1, s.testSlot3, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet3, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet3, snippet))
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testSlot3, expectedSnippet3)
 
 	expectedSnippet4 := []byte(`/dev/ttyO0 rw,
 `)
-	snippet, err = s.iface.ConnectedPlugSnippet(s.testPlugPort1, s.testSlot4, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet4, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet4, snippet))
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testSlot4, expectedSnippet4)
 
 	expectedSnippet5 := []byte(`/dev/ttyACM0 rw,
 `)
-	snippet, err = s.iface.ConnectedPlugSnippet(s.testPlugPort1, s.testSlot5, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet5, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet5, snippet))
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testSlot5, expectedSnippet5)
 
 	expectedSnippet6 := []byte(`/dev/ttyXRUSB0 rw,
 `)
-	snippet, err = s.iface.ConnectedPlugSnippet(s.testPlugPort1, s.testSlot6, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet6, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet6, snippet))
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testSlot5, expectedSnippet5)
+
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testSlot6, expectedSnippet6)
 
 	expectedSnippet7 := []byte(`/dev/tty[A-Z]*[0-9] rw,
 `)
-	snippet, err = s.iface.ConnectedPlugSnippet(s.testPlugPort1, s.testUdev1, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet7, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet7, snippet))
+	checkConnectedPlugSnippet(s.testPlugPort1, s.testUdev1, expectedSnippet7)
 
 	expectedSnippet8 := []byte(`/dev/tty[A-Z]*[0-9] rw,
 `)
-	snippet, err = s.iface.ConnectedPlugSnippet(s.testPlugPort2, s.testUdev2, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, DeepEquals, expectedSnippet8, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet8, snippet))
+	checkConnectedPlugSnippet(s.testPlugPort2, s.testUdev2, expectedSnippet8)
 }
