@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/snap/snaptest"
 	"github.com/snapcore/snapd/testutil"
@@ -81,10 +82,13 @@ func (s *UhidInterfaceSuite) TestSanitizePlug(c *C) {
 
 func (s *UhidInterfaceSuite) TestConnectedPlugAppArmorSnippets(c *C) {
 	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-	c.Check(string(snippet), testutil.Contains, "/dev/uhid rw,\n")
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(len(aasnippets), Equals, 1)
+	c.Assert(len(aasnippets["snap.client-snap.app-accessing-slot-1"]), Equals, 1)
+	c.Assert(string(aasnippets["snap.client-snap.app-accessing-slot-1"][0]), testutil.Contains, "/dev/uhid rw,\n")
 }
 
 func (s *UhidInterfaceSuite) TestConnectedPlugUdevSnippets(c *C) {
