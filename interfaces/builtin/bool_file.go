@@ -101,7 +101,7 @@ func (iface *BoolFileInterface) AppArmorPermanentSlot(spec *apparmor.Specificati
 	return nil
 }
 
-func (iface *BoolFileInterface) AppArmorConnectedSlot(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
+func (iface *BoolFileInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.Plug, slot *interfaces.Slot) error {
 	// Allow write and lock on the file designated by the path.
 	// Dereference symbolic links to file path handed out to apparmor since
 	// sysfs is full of symlinks and apparmor requires uses real path for
