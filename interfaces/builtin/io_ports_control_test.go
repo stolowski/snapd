@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/snap"
@@ -100,10 +101,14 @@ capability sys_rawio, # required by iopl
 
 	expectedSnippet3 := []byte(`KERNEL=="port", TAG+="snap_client-snap_app-accessing-io-ports"
 `)
-
 	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(len(aasnippets), Equals, 1)
+	c.Assert(len(aasnippets["snap.client-snap.app-accessing-io-ports"]), Equals, 1)
+	snippet := aasnippets["snap.client-snap.app-accessing-io-ports"][0]
 	c.Assert(snippet, DeepEquals, expectedSnippet1, Commentf("\nexpected:\n%s\nfound:\n%s", expectedSnippet1, snippet))
 
 	snippet, err = s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityUDev)
