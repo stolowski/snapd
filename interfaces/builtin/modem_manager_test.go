@@ -166,9 +166,17 @@ func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelOne(c 
 
 func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesUnconfinedLabelNot(c *C) {
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	plugSnap := snaptest.MockInfo(c, modemmgrMockPlugSnapInfoYaml, nil)
+	plug := &interfaces.Plug{PlugInfo: plugSnap.Plugs["modem-manager"]}
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(string(snippet), Not(testutil.Contains), "peer=(label=unconfined),")
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.modem-manager.mmcli"], HasLen, 1)
+	c.Assert(string(aasnippets["snap.modem-manager.mmcli"][0]), Not(testutil.Contains), "peer=(label=unconfined),")
+	c.Assert(string(aasnippets["snap.modem-manager.mmcli"][0]), testutil.Contains, "org/freedesktop/ModemManager1")
 }
 
 func (s *ModemManagerInterfaceSuite) TestConnectedPlugSnippetUsesUnconfinedLabelOnClassic(c *C) {
