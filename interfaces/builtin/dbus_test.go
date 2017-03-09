@@ -20,9 +20,11 @@
 package builtin_test
 
 import (
+	//	"fmt"
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/release"
 	"github.com/snapcore/snapd/snap"
@@ -117,20 +119,6 @@ apps:
 
 func (s *DbusInterfaceSuite) TestName(c *C) {
 	c.Assert(s.iface.Name(), Equals, "dbus")
-}
-
-func (s *DbusInterfaceSuite) TestUsedSecuritySystems(c *C) {
-	snippet, err := s.iface.PermanentSlotSnippet(s.sessionSlot, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-
-	snippet, err = s.iface.ConnectedSlotSnippet(s.connectedSessionPlug, s.connectedSessionSlot, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-
-	snippet, err = s.iface.ConnectedPlugSnippet(s.connectedSessionPlug, s.connectedSessionSlot, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
 }
 
 func (s *DbusInterfaceSuite) TestValidSessionBusName(c *C) {
@@ -300,9 +288,13 @@ plugs:
 }
 
 func (s *DbusInterfaceSuite) TestPermanentSlotAppArmorSession(c *C) {
-	snippet, err := s.iface.PermanentSlotSnippet(s.sessionSlot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(s.iface, s.sessionSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.test-dbus.test-session-provider"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-session-provider"][0])
 
 	// verify abstraction rule
 	c.Check(string(snippet), testutil.Contains, "#include <abstractions/dbus-session-strict>\n")
@@ -324,9 +316,14 @@ func (s *DbusInterfaceSuite) TestPermanentSlotAppArmorSessionNative(c *C) {
 	restore := release.MockOnClassic(false)
 	defer restore()
 	iface := &builtin.DbusInterface{}
-	snippet, err := iface.PermanentSlotSnippet(s.sessionSlot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(iface, s.sessionSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.test-dbus.test-session-provider"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-session-provider"][0])
 
 	// verify classic rule not present
 	c.Check(string(snippet), Not(testutil.Contains), "# allow us to respond to unconfined clients via \"org.test-session-slot{,.*}\"\n")
@@ -336,18 +333,27 @@ func (s *DbusInterfaceSuite) TestPermanentSlotAppArmorSessionClassic(c *C) {
 	restore := release.MockOnClassic(true)
 	defer restore()
 	iface := &builtin.DbusInterface{}
-	snippet, err := iface.PermanentSlotSnippet(s.sessionSlot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(iface, s.sessionSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.test-dbus.test-session-provider"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-session-provider"][0])
 
 	// verify classic rule
 	c.Check(string(snippet), testutil.Contains, "# allow us to respond to unconfined clients via \"org.test-session-slot{,.*}\"\n")
 }
 
 func (s *DbusInterfaceSuite) TestPermanentSlotAppArmorSystem(c *C) {
-	snippet, err := s.iface.PermanentSlotSnippet(s.systemSlot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(s.iface, s.systemSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.test-dbus.test-system-provider"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-system-provider"][0])
 
 	// verify abstraction rule
 	c.Check(string(snippet), testutil.Contains, "#include <abstractions/dbus-strict>\n")
@@ -379,9 +385,14 @@ func (s *DbusInterfaceSuite) TestPermanentSlotDBusSystem(c *C) {
 
 func (s *DbusInterfaceSuite) TestConnectedSlotAppArmorSession(c *C) {
 	iface := &builtin.DbusInterface{}
-	snippet, err := iface.ConnectedSlotSnippet(s.connectedSessionPlug, s.connectedSessionSlot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedSlot(iface, s.connectedSessionPlug, s.connectedSessionSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 4)
+	c.Assert(aasnippets["snap.test-dbus.test-session-provider"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-session-provider"][0])
 
 	// verify introspectable rule
 	c.Check(string(snippet), testutil.Contains, "dbus (receive)\n    bus=session\n    interface=org.freedesktop.DBus.Introspectable\n    member=Introspect\n    peer=(label=\"snap.test-dbus.*\"),\n")
@@ -398,9 +409,14 @@ func (s *DbusInterfaceSuite) TestConnectedSlotAppArmorSession(c *C) {
 
 func (s *DbusInterfaceSuite) TestConnectedSlotAppArmorSystem(c *C) {
 	iface := &builtin.DbusInterface{}
-	snippet, err := iface.ConnectedSlotSnippet(s.connectedSystemPlug, s.connectedSystemSlot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedSlot(iface, s.connectedSystemPlug, s.connectedSystemSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 4)
+	c.Assert(aasnippets["snap.test-dbus.test-session-provider"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-session-provider"][0])
 
 	// verify introspectable rule
 	c.Check(string(snippet), testutil.Contains, "dbus (receive)\n    bus=system\n    interface=org.freedesktop.DBus.Introspectable\n    member=Introspect\n    peer=(label=\"snap.test-dbus.*\"),\n")
@@ -417,9 +433,14 @@ func (s *DbusInterfaceSuite) TestConnectedSlotAppArmorSystem(c *C) {
 
 func (s *DbusInterfaceSuite) TestConnectedPlugAppArmorSession(c *C) {
 	iface := &builtin.DbusInterface{}
-	snippet, err := iface.ConnectedPlugSnippet(s.connectedSessionPlug, s.connectedSessionSlot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(iface, s.connectedSessionPlug, s.connectedSessionSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 4)
+	c.Assert(aasnippets["snap.test-dbus.test-session-consumer"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-session-consumer"][0])
 
 	// verify introspectable rule
 	c.Check(string(snippet), testutil.Contains, "dbus (send)\n    bus=session\n    interface=org.freedesktop.DBus.Introspectable\n    member=Introspect\n    peer=(label=\"snap.test-dbus.*\"),\n")
@@ -441,9 +462,14 @@ func (s *DbusInterfaceSuite) TestConnectedPlugAppArmorSession(c *C) {
 
 func (s *DbusInterfaceSuite) TestConnectedPlugAppArmorSystem(c *C) {
 	iface := &builtin.DbusInterface{}
-	snippet, err := iface.ConnectedPlugSnippet(s.connectedSystemPlug, s.connectedSystemSlot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(iface, s.connectedSystemPlug, s.connectedSystemSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 4)
+	c.Assert(aasnippets["snap.test-dbus.test-session-consumer"], HasLen, 1)
+	snippet := string(aasnippets["snap.test-dbus.test-session-consumer"][0])
 
 	// verify introspectable rule
 	c.Check(string(snippet), testutil.Contains, "dbus (send)\n    bus=system\n    interface=org.freedesktop.DBus.Introspectable\n    member=Introspect\n    peer=(label=\"snap.test-dbus.*\"),\n")
@@ -469,6 +495,9 @@ plugs:
   interface: dbus
   bus: session
   name: org.slotter.session
+apps:
+ app:
+  command: foo
 `
 	const slotYaml = `name: slotter
 version: 1.0
@@ -490,17 +519,24 @@ slots:
 	matchingSlot := &interfaces.Slot{SlotInfo: slotInfo.Slots["this"]}
 	nonmatchingSlot := &interfaces.Slot{SlotInfo: slotInfo.Slots["that"]}
 
-	snippet, err := s.iface.ConnectedPlugSnippet(matchingPlug, matchingSlot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, matchingPlug, matchingSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.plugger.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.plugger.app"][0])
+
 	c.Check(string(snippet), testutil.Contains, "org.slotter.session")
 	c.Check(string(snippet), testutil.Contains, "bus=session")
 	c.Check(string(snippet), Not(testutil.Contains), "org.slotter.other-session")
 	c.Check(string(snippet), Not(testutil.Contains), "bus=system")
 
-	snippet, err = s.iface.ConnectedPlugSnippet(matchingPlug, nonmatchingSlot, interfaces.SecurityAppArmor)
+	apparmorSpec = &apparmor.Specification{}
+	err = apparmorSpec.AddConnectedPlug(s.iface, matchingPlug, nonmatchingSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, IsNil)
+	aasnippets = apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 0)
 }
 
 func (s *DbusInterfaceSuite) TestConnectionSecond(c *C) {
@@ -511,6 +547,9 @@ plugs:
   interface: dbus
   bus: system
   name: org.slotter.other-session
+apps:
+ app:
+  command: foo
 `
 	const slotYaml = `name: slotter
 version: 1.0
@@ -532,17 +571,24 @@ slots:
 	matchingSlot := &interfaces.Slot{SlotInfo: slotInfo.Slots["that"]}
 	nonmatchingSlot := &interfaces.Slot{SlotInfo: slotInfo.Slots["this"]}
 
-	snippet, err := s.iface.ConnectedPlugSnippet(matchingPlug, matchingSlot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, matchingPlug, matchingSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.plugger.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.plugger.app"][0])
+
 	c.Check(string(snippet), testutil.Contains, "org.slotter.other-session")
 	c.Check(string(snippet), testutil.Contains, "bus=system")
 	c.Check(string(snippet), Not(testutil.Contains), "org.slotter.session")
 	c.Check(string(snippet), Not(testutil.Contains), "bus=session")
 
-	snippet, err = s.iface.ConnectedPlugSnippet(matchingPlug, nonmatchingSlot, interfaces.SecurityAppArmor)
+	apparmorSpec = &apparmor.Specification{}
+	err = apparmorSpec.AddConnectedPlug(s.iface, matchingPlug, nonmatchingSlot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, IsNil)
+	aasnippets = apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 0)
 }
 
 func (s *DbusInterfaceSuite) TestConnectionBoth(c *C) {
@@ -557,6 +603,9 @@ plugs:
   interface: dbus
   bus: session
   name: org.slotter.session
+apps:
+ app:
+  command: foo
 `
 	const slotYaml = `name: slotter
 version: 1.0
@@ -579,15 +628,23 @@ slots:
 	matchingSlot1 := &interfaces.Slot{SlotInfo: slotInfo.Slots["this"]}
 	matchingSlot2 := &interfaces.Slot{SlotInfo: slotInfo.Slots["that"]}
 
-	snippet, err := s.iface.ConnectedPlugSnippet(matchingPlug1, matchingSlot1, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, matchingPlug1, matchingSlot1)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.plugger.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.plugger.app"][0])
 	c.Check(string(snippet), testutil.Contains, "org.slotter.session")
 	c.Check(string(snippet), testutil.Contains, "bus=session")
 
-	snippet, err = s.iface.ConnectedPlugSnippet(matchingPlug2, matchingSlot2, interfaces.SecurityAppArmor)
+	apparmorSpec = &apparmor.Specification{}
+	err = apparmorSpec.AddConnectedPlug(s.iface, matchingPlug2, matchingSlot2)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets = apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.plugger.app"], HasLen, 1)
+	snippet = string(aasnippets["snap.plugger.app"][0])
 	c.Check(string(snippet), testutil.Contains, "org.slotter.other-session")
 	c.Check(string(snippet), testutil.Contains, "bus=system")
 }
@@ -616,9 +673,11 @@ slots:
 	slotInfo := snaptest.MockInfo(c, slotYaml, nil)
 	slot := &interfaces.Slot{SlotInfo: slotInfo.Slots["this"]}
 
-	snippet, err := s.iface.ConnectedPlugSnippet(plug, slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 0)
 }
 
 func (s *DbusInterfaceSuite) TestConnectionMismatchName(c *C) {
@@ -645,7 +704,9 @@ slots:
 	slotInfo := snaptest.MockInfo(c, slotYaml, nil)
 	slot := &interfaces.Slot{SlotInfo: slotInfo.Slots["this"]}
 
-	snippet, err := s.iface.ConnectedPlugSnippet(plug, slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, plug, slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 0)
 }
