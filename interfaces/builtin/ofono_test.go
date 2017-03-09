@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/release"
@@ -37,23 +38,32 @@ type OfonoInterfaceSuite struct {
 	plug  *interfaces.Plug
 }
 
-var _ = Suite(&OfonoInterfaceSuite{
-	iface: &builtin.OfonoInterface{},
-	slot: &interfaces.Slot{
-		SlotInfo: &snap.SlotInfo{
-			Snap:      &snap.Info{SuggestedName: "ofono"},
-			Name:      "ofono",
-			Interface: "ofono",
-		},
-	},
-	plug: &interfaces.Plug{
-		PlugInfo: &snap.PlugInfo{
-			Snap:      &snap.Info{SuggestedName: "ofono"},
-			Name:      "dbus-send",
-			Interface: "ofono",
-		},
-	},
-})
+var _ = Suite(&OfonoInterfaceSuite{})
+
+func (s *OfonoInterfaceSuite) SetUpTest(c *C) {
+	var mockPlugSnapInfoYaml = `name: other
+version: 1.0
+apps:
+ app:
+  command: foo
+  plugs: [ofono]
+`
+	const mockSlotSnapInfoYaml = `name: ofono
+version: 1.0
+slots:
+ ofono:
+  interface: ofono
+apps:
+ app:
+  command: foo
+  slots: [ofono]
+`
+	s.iface = &builtin.OfonoInterface{}
+	snapInfo := snaptest.MockInfo(c, mockSlotSnapInfoYaml, nil)
+	s.slot = &interfaces.Slot{SlotInfo: snapInfo.Slots["ofono"]}
+	snapInfo = snaptest.MockInfo(c, mockPlugSnapInfoYaml, nil)
+	s.plug = &interfaces.Plug{PlugInfo: snapInfo.Plugs["ofono"]}
+}
 
 func (s *OfonoInterfaceSuite) TestName(c *C) {
 	c.Assert(s.iface.Name(), Equals, "ofono")
@@ -75,8 +85,14 @@ func (s *OfonoInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelAll(c *C) {
 		},
 	}
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.ofono.*"),`)
 }
 
@@ -97,8 +113,14 @@ func (s *OfonoInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelSome(c *C) {
 		},
 	}
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.ofono.{app1,app2}"),`)
 }
 
@@ -117,15 +139,27 @@ func (s *OfonoInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelOne(c *C) {
 		},
 	}
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.ofono.app"),`)
 }
 
 func (s *OfonoInterfaceSuite) TestConnectedPlugSnippetUsesUnconfinedLabelOnClassic(c *C) {
 	release.OnClassic = true
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	// verify apparmor connected
 	c.Assert(string(snippet), testutil.Contains, "#include <abstractions/dbus-strict>")
 	// verify classic connected
@@ -134,8 +168,13 @@ func (s *OfonoInterfaceSuite) TestConnectedPlugSnippetUsesUnconfinedLabelOnClass
 
 func (s *OfonoInterfaceSuite) TestConnectedPlugSnippetAppArmor(c *C) {
 	release.OnClassic = false
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	// verify apparmor connected
 	c.Assert(string(snippet), testutil.Contains, "#include <abstractions/dbus-strict>")
 	// verify classic didn't connect
@@ -143,38 +182,30 @@ func (s *OfonoInterfaceSuite) TestConnectedPlugSnippetAppArmor(c *C) {
 }
 
 func (s *OfonoInterfaceSuite) TestConnectedSlotSnippetAppArmor(c *C) {
-	snippet, err := s.iface.ConnectedSlotSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedSlot(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-
-	c.Check(string(snippet), testutil.Contains, "peer=(label=\"snap.ofono.*\")")
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.ofono.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.ofono.app"][0])
+	c.Check(string(snippet), testutil.Contains, "peer=(label=\"snap.other.app\")")
 }
 
 func (s *OfonoInterfaceSuite) TestPermanentSlotSnippetAppArmor(c *C) {
-	snippet, err := s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(s.iface, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.ofono.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.ofono.app"][0])
 	c.Check(string(snippet), testutil.Contains, "/dev/net/tun rw,")
 }
 
-const ofonoMockSlotSnapInfoYaml = `name: ofono
-version: 1.0
-slots:
- ofono:
-  interface: ofono
-apps:
- app:
-  command: foo
-  slots: [ofono]
-`
-
 func (s *OfonoInterfaceSuite) TestPermanentSlotSnippetSecComp(c *C) {
-	slotSnap := snaptest.MockInfo(c, ofonoMockSlotSnapInfoYaml, nil)
-	slot := &interfaces.Slot{SlotInfo: slotSnap.Slots["ofono"]}
-
 	seccompSpec := &seccomp.Specification{}
-	err := seccompSpec.AddPermanentSlot(s.iface, slot)
+	err := seccompSpec.AddPermanentSlot(s.iface, s.slot)
 	c.Assert(err, IsNil)
 	snippets := seccompSpec.Snippets()
 	c.Assert(len(snippets), Equals, 1)
