@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/release"
 	"github.com/snapcore/snapd/snap"
@@ -36,23 +37,30 @@ type MprisInterfaceSuite struct {
 	plug  *interfaces.Plug
 }
 
-var _ = Suite(&MprisInterfaceSuite{
-	iface: &builtin.MprisInterface{},
-	slot: &interfaces.Slot{
-		SlotInfo: &snap.SlotInfo{
-			Snap:      &snap.Info{SuggestedName: "mpris"},
-			Name:      "mpris-player",
-			Interface: "mpris",
-		},
-	},
-	plug: &interfaces.Plug{
-		PlugInfo: &snap.PlugInfo{
-			Snap:      &snap.Info{SuggestedName: "mpris"},
-			Name:      "mpris-client",
-			Interface: "mpris",
-		},
-	},
-})
+var _ = Suite(&MprisInterfaceSuite{})
+
+func (s *MprisInterfaceSuite) SetUpTest(c *C) {
+	var mockPlugSnapInfoYaml = `name: other
+version: 1.0
+apps:
+ app:
+  command: foo
+  plugs: [mpris]
+`
+	var mockSlotSnapInfoYaml = `name: mpris
+version: 1.0
+apps:
+ app:
+  command: foo
+  slots: [mpris]
+`
+
+	s.iface = &builtin.MprisInterface{}
+	snapInfo := snaptest.MockInfo(c, mockPlugSnapInfoYaml, nil)
+	s.plug = &interfaces.Plug{PlugInfo: snapInfo.Plugs["mpris"]}
+	snapInfo = snaptest.MockInfo(c, mockSlotSnapInfoYaml, nil)
+	s.slot = &interfaces.Slot{SlotInfo: snapInfo.Slots["mpris"]}
+}
 
 func (s *MprisInterfaceSuite) TestName(c *C) {
 	c.Assert(s.iface.Name(), Equals, "mpris")
@@ -155,8 +163,14 @@ func (s *MprisInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelAll(c *C) {
 			Apps:      map[string]*snap.AppInfo{"app1": app1, "app2": app2},
 		},
 	}
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.mpris.*"),`)
 }
 
@@ -176,8 +190,14 @@ func (s *MprisInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelSome(c *C) {
 			Apps:      map[string]*snap.AppInfo{"app1": app1, "app2": app2},
 		},
 	}
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.mpris.{app1,app2}"),`)
 }
 
@@ -195,8 +215,14 @@ func (s *MprisInterfaceSuite) TestConnectedPlugSnippetUsesSlotLabelOne(c *C) {
 			Apps:      map[string]*snap.AppInfo{"app": app},
 		},
 	}
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.other.app"][0])
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.mpris.app"),`)
 }
 
@@ -215,8 +241,14 @@ func (s *MprisInterfaceSuite) TestConnectedSlotSnippetUsesPlugLabelAll(c *C) {
 			Apps:      map[string]*snap.AppInfo{"app1": app1, "app2": app2},
 		},
 	}
-	snippet, err := s.iface.ConnectedSlotSnippet(plug, s.slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedSlot(s.iface, plug, s.slot)
 	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.mpris.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.mpris.app"][0])
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.mpris.*"),`)
 }
 
@@ -236,7 +268,14 @@ func (s *MprisInterfaceSuite) TestConnectedSlotSnippetUsesPlugLabelSome(c *C) {
 			Apps:      map[string]*snap.AppInfo{"app1": app1, "app2": app2},
 		},
 	}
-	snippet, err := s.iface.ConnectedSlotSnippet(plug, s.slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedSlot(s.iface, plug, s.slot)
+	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.mpris.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.mpris.app"][0])
 	c.Assert(err, IsNil)
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.mpris.{app1,app2}"),`)
 }
@@ -255,15 +294,26 @@ func (s *MprisInterfaceSuite) TestConnectedSlotSnippetUsesPlugLabelOne(c *C) {
 			Apps:      map[string]*snap.AppInfo{"app": app},
 		},
 	}
-	snippet, err := s.iface.ConnectedSlotSnippet(plug, s.slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedSlot(s.iface, plug, s.slot)
+	c.Assert(err, IsNil)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.mpris.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.mpris.app"][0])
 	c.Assert(err, IsNil)
 	c.Assert(string(snippet), testutil.Contains, `peer=(label="snap.mpris.app"),`)
 }
 
 func (s *MprisInterfaceSuite) TestPermanentSlotAppArmor(c *C) {
-	snippet, err := s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(s.iface, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.mpris.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.mpris.app"][0])
 
 	// verify bind rule
 	c.Check(string(snippet), testutil.Contains, "dbus (bind)\n    bus=session\n    name=\"org.mpris.MediaPlayer2.@{SNAP_NAME}{,.*}\",\n")
@@ -276,13 +326,20 @@ slots:
  mpris-slot:
   interface: mpris
   name: foo
+apps:
+ app:
+  command: foo
 `
 	info := snaptest.MockInfo(c, mockSnapYaml, nil)
 	slot := &interfaces.Slot{SlotInfo: info.Slots["mpris-slot"]}
-	iface := &builtin.MprisInterface{}
-	snippet, err := iface.PermanentSlotSnippet(slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(s.iface, slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.mpris-client.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.mpris-client.app"][0])
 
 	// verify bind rule
 	c.Check(string(snippet), testutil.Contains, "dbus (bind)\n    bus=session\n    name=\"org.mpris.MediaPlayer2.foo{,.*}\",\n")
@@ -291,10 +348,14 @@ slots:
 func (s *MprisInterfaceSuite) TestPermanentSlotAppArmorNative(c *C) {
 	restore := release.MockOnClassic(false)
 	defer restore()
-	iface := &builtin.MprisInterface{}
-	snippet, err := iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(s.iface, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.mpris.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.mpris.app"][0])
 
 	// verify classic rule not present
 	c.Check(string(snippet), Not(testutil.Contains), "# Allow unconfined clients to interact with the player on classic\n")
@@ -303,20 +364,15 @@ func (s *MprisInterfaceSuite) TestPermanentSlotAppArmorNative(c *C) {
 func (s *MprisInterfaceSuite) TestPermanentSlotAppArmorClassic(c *C) {
 	restore := release.MockOnClassic(true)
 	defer restore()
-	iface := &builtin.MprisInterface{}
-	snippet, err := iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
+
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddPermanentSlot(s.iface, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.mpris.app"], HasLen, 1)
+	snippet := string(aasnippets["snap.mpris.app"][0])
 
 	// verify classic rule present
 	c.Check(string(snippet), testutil.Contains, "# Allow unconfined clients to interact with the player on classic\n")
-}
-
-func (s *MprisInterfaceSuite) TestUsedSecuritySystems(c *C) {
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-	snippet, err = s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
-	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
 }
