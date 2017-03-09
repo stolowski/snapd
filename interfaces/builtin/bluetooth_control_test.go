@@ -23,6 +23,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/snap"
@@ -94,9 +95,14 @@ func (s *BluetoothControlInterfaceSuite) TestSanitizeIncorrectInterface(c *C) {
 
 func (s *BluetoothControlInterfaceSuite) TestUsedSecuritySystems(c *C) {
 	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app2"], HasLen, 1)
+	c.Assert(string(aasnippets["snap.other.app2"][0]), testutil.Contains, "capability net_admin")
+
 	// connected plugs have a non-nil security snippet for seccomp
 	seccompSpec := &seccomp.Specification{}
 	err = seccompSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
