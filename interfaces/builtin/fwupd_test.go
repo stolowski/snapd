@@ -48,7 +48,7 @@ apps:
 const mockSlotSnapInfoYaml = `name: uefi-fw-tools
 version: 1.0
 apps:
- app:
+ app2:
   command: foo
   slots: [fwupd]
 `
@@ -140,9 +140,9 @@ func (s *FwupdInterfaceSuite) TestUsedSecuritySystems(c *C) {
 	err = apparmorSpec.AddPermanentSlot(s.iface, s.slot)
 	c.Assert(err, IsNil)
 	aasnippets := apparmorSpec.Snippets()
-	c.Assert(len(aasnippets), Equals, 2)
-	c.Assert(len(aasnippets["snap.uefi-fw-tools.app"]), Equals, 1)
-	c.Assert(len(aasnippets["snap.uefi-fw-tools.app2"]), Equals, 2)
+	c.Assert(aasnippets, HasLen, 2)
+	c.Assert(aasnippets["snap.uefi-fw-tools.app"], HasLen, 1)
+	c.Assert(aasnippets["snap.uefi-fw-tools.app2"], HasLen, 2)
 
 	snippet, err := s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityDBus)
 	c.Assert(err, IsNil)
@@ -155,8 +155,8 @@ func (s *FwupdInterfaceSuite) TestPermanentSlotSnippetSecComp(c *C) {
 	c.Assert(err, IsNil)
 	snippets := seccompSpec.Snippets()
 	c.Assert(len(snippets), Equals, 1)
-	c.Assert(len(snippets["snap.uefi-fw-tools.app"]), Equals, 1)
-	c.Check(string(snippets["snap.uefi-fw-tools.app"][0]), testutil.Contains, "bind\n")
+	c.Assert(len(snippets["snap.uefi-fw-tools.app2"]), Equals, 1)
+	c.Check(string(snippets["snap.uefi-fw-tools.app2"][0]), testutil.Contains, "bind\n")
 }
 
 func (s *FwupdInterfaceSuite) TestConnectedPlugSnippetSecComp(c *C) {
