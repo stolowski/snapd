@@ -26,7 +26,6 @@ import (
 	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/kmod"
-	"github.com/snapcore/snapd/snap"
 	"github.com/snapcore/snapd/snap/snaptest"
 	"github.com/snapcore/snapd/testutil"
 )
@@ -47,14 +46,19 @@ apps:
   command: foo
   plugs: [ppp]
 `
+
+	const mockSlotSnapInfo = `name: ppp
+version: 1.0
+apps:
+ app:
+  command: foo
+  slots: [ppp]
+`
+
 	s.iface = &builtin.PppInterface{}
-	s.slot = &interfaces.Slot{
-		SlotInfo: &snap.SlotInfo{
-			Snap:      &snap.Info{SuggestedName: "ppp"},
-			Name:      "ppp",
-			Interface: "ppp",
-		},
-	}
+	slotSnap := snaptest.MockInfo(c, mockPlugSnapInfo, nil)
+	s.slot = &interfaces.Slot{SlotInfo: slotSnap.Slots["ppp"]}
+
 	plugSnap := snaptest.MockInfo(c, mockPlugSnapInfo, nil)
 	s.plug = &interfaces.Plug{PlugInfo: plugSnap.Plugs["ppp"]}
 }
@@ -73,11 +77,12 @@ func (s *PppInterfaceSuite) TestUsedSecuritySystems(c *C) {
 	aasnippet := string(aasnippets["snap.other.app"][0])
 	c.Assert(aasnippet, testutil.Contains, `/usr/sbin/pppd ix,`)
 
-	snippet, err := s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec = &apparmor.Specification{}
+	err = apparmorSpec.AddPermanentSlot(s.iface, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, IsNil)
+	c.Assert(apparmorSpec.Snippets(), HasLen, 0)
 
-	snippet, err = s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityDBus)
+	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityDBus)
 	c.Assert(err, IsNil)
 	c.Assert(snippet, IsNil)
 	snippet, err = s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityDBus)
