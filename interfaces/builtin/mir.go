@@ -38,6 +38,9 @@ capability sys_tty_config,
 /{dev,run}/shm/\#* rw,
 /run/mir_socket rw,
 
+# Needed for mode setting via drmSetMaster() and drmDropMaster()
+capability sys_admin,
+
 # NOTE: this allows reading and inserting all input events
 /dev/input/* rw,
 
@@ -45,6 +48,7 @@ capability sys_tty_config,
 network netlink raw,
 /run/udev/data/c13:[0-9]* r,
 /run/udev/data/+input:input[0-9]* r,
+/run/udev/data/+platform:* r,
 `
 
 const mirPermanentSlotSecComp = `
