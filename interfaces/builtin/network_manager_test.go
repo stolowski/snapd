@@ -49,7 +49,6 @@ apps:
   plugs:
    - network-manager
 `
-
 const netmgrMockSlotSnapInfoYaml = `name: network-manager
 version: 1.0
 apps:

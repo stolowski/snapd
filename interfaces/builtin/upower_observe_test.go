@@ -228,6 +228,14 @@ func (s *UPowerObserveInterfaceSuite) TestPermanentSlotSnippetAppArmor(c *C) {
 	c.Check(string(snippet), testutil.Contains, "org.freedesktop.UPower")
 }
 
+const upowerObserveMockSlotSnapInfoYaml = `name: upower
+version: 1.0
+apps:
+ app1:
+  command: foo
+  slots: [upower-observe]
+`
+
 func (s *UPowerObserveInterfaceSuite) TestPermanentSlotSnippetSecComp(c *C) {
 	seccompSpec := &seccomp.Specification{}
 	err := seccompSpec.AddPermanentSlot(s.iface, s.coreSlot)
