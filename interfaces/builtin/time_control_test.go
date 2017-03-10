@@ -23,9 +23,11 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/snap"
 	"github.com/snapcore/snapd/snap/snaptest"
+	"github.com/snapcore/snapd/testutil"
 )
 
 type TimeControlTestInterfaceSuite struct {
@@ -88,11 +90,17 @@ func (s *TimeControlTestInterfaceSuite) TestUsedSecuritySystems(c *C) {
 	expectedUDevSnippet := []byte(`KERNEL=="/dev/rtc0", TAG+="snap_client-snap_app-accessing-time-control"`)
 
 	// connected plugs have a non-nil security snippet for apparmor
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.client-snap.app-accessing-time-control"], HasLen, 1)
+	aasnippet := string(aasnippets["snap.client-snap.app-accessing-time-control"][0])
+	c.Check(aasnippet, testutil.Contains, "org/freedesktop/timedate1")
+
 	// connected plugs have a non-nil security snippet for udev
-	snippet, err = s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityUDev)
+	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityUDev)
 	c.Assert(err, IsNil)
 	c.Assert(snippet, DeepEquals, expectedUDevSnippet, Commentf("\nexpected:\n%s\nfound:\n%s", expectedUDevSnippet, snippet))
 }
