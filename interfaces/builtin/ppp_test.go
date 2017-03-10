@@ -23,9 +23,12 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/interfaces"
+	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/kmod"
 	"github.com/snapcore/snapd/snap"
+	"github.com/snapcore/snapd/snap/snaptest"
+	"github.com/snapcore/snapd/testutil"
 )
 
 type PppInterfaceSuite struct {
@@ -34,33 +37,43 @@ type PppInterfaceSuite struct {
 	plug  *interfaces.Plug
 }
 
-var _ = Suite(&PppInterfaceSuite{
-	iface: &builtin.PppInterface{},
-	slot: &interfaces.Slot{
+var _ = Suite(&PppInterfaceSuite{})
+
+func (s *PppInterfaceSuite) SetUpTest(c *C) {
+	const mockPlugSnapInfo = `name: other
+version: 1.0
+apps:
+ app:
+  command: foo
+  plugs: [ppp]
+`
+	s.iface = &builtin.PppInterface{}
+	s.slot = &interfaces.Slot{
 		SlotInfo: &snap.SlotInfo{
 			Snap:      &snap.Info{SuggestedName: "ppp"},
 			Name:      "ppp",
 			Interface: "ppp",
 		},
-	},
-	plug: &interfaces.Plug{
-		PlugInfo: &snap.PlugInfo{
-			Snap:      &snap.Info{SuggestedName: "ppp"},
-			Name:      "mmcli",
-			Interface: "ppp",
-		},
-	},
-})
+	}
+	plugSnap := snaptest.MockInfo(c, mockPlugSnapInfo, nil)
+	s.plug = &interfaces.Plug{PlugInfo: plugSnap.Plugs["ppp"]}
+}
 
 func (s *PppInterfaceSuite) TestName(c *C) {
 	c.Assert(s.iface.Name(), Equals, "ppp")
 }
 
 func (s *PppInterfaceSuite) TestUsedSecuritySystems(c *C) {
-	snippet, err := s.iface.ConnectedPlugSnippet(s.plug, s.slot, interfaces.SecurityAppArmor)
+	apparmorSpec := &apparmor.Specification{}
+	err := apparmorSpec.AddConnectedPlug(s.iface, s.plug, s.slot)
 	c.Assert(err, IsNil)
-	c.Assert(snippet, Not(IsNil))
-	snippet, err = s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
+	aasnippets := apparmorSpec.Snippets()
+	c.Assert(aasnippets, HasLen, 1)
+	c.Assert(aasnippets["snap.other.app"], HasLen, 1)
+	aasnippet := string(aasnippets["snap.other.app"][0])
+	c.Assert(aasnippet, testutil.Contains, `/usr/sbin/pppd ix,`)
+
+	snippet, err := s.iface.PermanentSlotSnippet(s.slot, interfaces.SecurityAppArmor)
 	c.Assert(err, IsNil)
 	c.Assert(snippet, IsNil)
 
