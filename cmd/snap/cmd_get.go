@@ -139,6 +139,68 @@ func flattenConfig(cfg map[string]interface{}, root bool) (values []ConfigValue)
 	return values
 }
 
+func (c *cmdGet) outputJson(conf interface{}) error {
+	bytes, err := json.MarshalIndent(conf, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(Stdout, string(bytes))
+	return nil
+}
+
+func (x *cmdGet) outputList(conf map[string]interface{}) error {
+	rootRequested := len(x.Positional.Keys) == 0
+	if rootRequested && len(conf) == 0 {
+		return fmt.Errorf("snap %q has no configuration", x.Positional.Snap)
+	}
+
+	w := tabWriter()
+	defer w.Flush()
+
+	fmt.Fprintf(w, "Key\tValue\n")
+	values := flattenConfig(conf, rootRequested)
+	for _, v := range values {
+		fmt.Fprintf(w, "%s\t%v\n", v.Path, v.Value)
+	}
+	return nil
+}
+
+func (x *cmdGet) outputDefault(conf map[string]interface{}, snapName string, confKeys []string) error {
+	rootRequested := len(confKeys) == 0
+	var confToPrint interface{} = conf
+
+	if rootRequested && len(conf) == 0 {
+		return fmt.Errorf("snap %q has no configuration", snapName)
+	}
+
+	if len(confKeys) == 1 {
+		// if single key was requested, then just output the value unless it's a map,
+		// in which case it will be printed as a list below.
+		if _, ok := conf[confKeys[0]].(map[string]interface{}); !ok {
+			confToPrint = conf[confKeys[0]]
+		}
+	}
+
+	if _, ok := confToPrint.(map[string]interface{}); ok {
+		// TODO: remove this conditional and the warning below after a transition period.
+		fmt.Fprintf(Stderr, i18n.G(`WARNING: The output of "snap get" will become a list with columns - use -d or -l to force the output format.\n`))
+	}
+
+	if s, ok := confToPrint.(string); ok && !x.Typed {
+		fmt.Fprintln(Stdout, s)
+		return nil
+	}
+
+	if confToPrint != nil || x.Typed {
+		return x.outputJson(confToPrint)
+	}
+
+	fmt.Fprintln(Stdout, "")
+	return nil
+
+}
+
 func (x *cmdGet) Execute(args []string) error {
 	if len(args) > 0 {
 		// TRANSLATORS: the %s is the list of extra arguments
@@ -163,58 +225,12 @@ func (x *cmdGet) Execute(args []string) error {
 	}
 
 	isTerminal := terminal.IsTerminal(int(os.Stdin.Fd()))
-	rootRequested := len(confKeys) == 0
-	var confToPrint interface{} = conf
-
-	if rootRequested && len(conf) == 0 {
-		if !x.Document {
-			return fmt.Errorf("snap %q has no configuration", snapName)
-		}
-	} else {
-		if !x.Document && !x.List && len(confKeys) == 1 {
-			// if single key was requested, then just output the value unless it's a map,
-			// in which case it will be printed as a list below.
-			if _, ok := conf[confKeys[0]].(map[string]interface{}); !ok {
-				confToPrint = conf[confKeys[0]]
-			}
-		}
-
-		if cfg, ok := confToPrint.(map[string]interface{}); ok && !x.Document {
-			// TODO: remove this conditional and the warning below after a transition period.
-			if isTerminal || x.List {
-				w := tabWriter()
-				defer w.Flush()
-
-				fmt.Fprintf(w, "Key\tValue\n")
-				values := flattenConfig(cfg, rootRequested)
-				for _, v := range values {
-					fmt.Fprintf(w, "%s\t%v\n", v.Path, v.Value)
-				}
-				return nil
-			} else {
-				fmt.Fprintf(Stderr, i18n.G(`WARNING: The output of "snap get" will become a list with columns - use -d or -l to force the output format.\n`))
-			}
-		}
-
-		if x.Typed && confToPrint == nil {
-			fmt.Fprintln(Stdout, "null")
-			return nil
-		}
-
-		if s, ok := confToPrint.(string); ok && !x.Typed {
-			fmt.Fprintln(Stdout, s)
-			return nil
-		}
+	switch {
+	case x.Document:
+		return x.outputJson(conf)
+	case x.List || isTerminal:
+		return x.outputList(conf)
+	default:
+		return x.outputDefault(conf, snapName, confKeys)
 	}
-
-	var bytes []byte
-	if confToPrint != nil {
-		bytes, err = json.MarshalIndent(confToPrint, "", "\t")
-		if err != nil {
-			return err
-		}
-	}
-
-	fmt.Fprintln(Stdout, string(bytes))
-	return nil
 }
