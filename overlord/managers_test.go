@@ -2511,6 +2511,10 @@ func (ms *mgrsSuite) testUpdateWithAutoconnectRetry(c *C, updateSnapName, remove
 	st.Lock()
 	c.Assert(err, IsNil)
 
+	for _, _t := range st.Tasks() {
+		fmt.Printf("test: %s -> %s, %s\n", _t.Kind(), _t.Status(), strings.Join(_t.Log(), ``))
+	}
+
 	c.Check(chg.Err(), IsNil)
 	c.Assert(chg.Status(), Equals, state.DoneStatus)
 

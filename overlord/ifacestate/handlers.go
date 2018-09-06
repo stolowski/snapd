@@ -618,6 +618,10 @@ func (m *InterfaceManager) defaultContentProviders(snapName string) map[string]b
 }
 
 func checkAutoconnectConflicts(st *state.State, plugSnap, slotSnap string) error {
+	fmt.Printf("conflict check for %s, %s\n", plugSnap, slotSnap)
+	for _, _t := range st.Tasks() {
+		fmt.Printf("conflict check: %s -> %s, %s\n", _t.Kind(), _t.Status(), strings.Join(_t.Log(), ``))
+	}
 	for _, task := range st.Tasks() {
 		if task.Status().Ready() {
 			continue
@@ -633,6 +637,7 @@ func checkAutoconnectConflicts(st *state.State, plugSnap, slotSnap string) error
 				return err
 			}
 			if plugRef.Snap == plugSnap || slotRef.Snap == slotSnap {
+				fmt.Printf("retry because of connect/disconnect\n")
 				return &state.Retry{After: connectRetryTimeout}
 			}
 			continue
@@ -653,6 +658,7 @@ func checkAutoconnectConflicts(st *state.State, plugSnap, slotSnap string) error
 
 		// other snap that affects us because of plug or slot
 		if k == "unlink-snap" || k == "link-snap" || k == "setup-profiles" {
+			fmt.Printf("retry because of unlink/link/setup-profiles\n")
 			// if snap is getting removed, we will retry but the snap will be gone and auto-connect becomes no-op
 			// if snap is getting installed/refreshed - temporary conflict, retry later
 			return &state.Retry{After: connectRetryTimeout}
