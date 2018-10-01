@@ -68,12 +68,17 @@ func (iface *limeSdrInterface) HotplugDeviceKey(di *hotplug.HotplugDeviceInfo) (
 		return "", nil
 	}
 
+	// XXX: for some reason "remove" udev event for LimeSDR contains only a small subset of attributes reported by "add",
+	// therefore device key can only use PRODUCT attribute.
 	product, _ := di.Attribute("PRODUCT")
 	return product, nil
 }
 
 func (iface *limeSdrInterface) HotplugDeviceDetected(di *hotplug.HotplugDeviceInfo, spec *hotplug.Specification) error {
 	if di.Subsystem() != "usb" {
+		return nil
+	}
+	if devtype, ok := di.Attribute("DEVTYPE"); !ok || devtype != "usb_device" {
 		return nil
 	}
 	if model, ok := di.Attribute("ID_MODEL"); ok && strings.HasPrefix(model, "LimeSDR-USB") {
