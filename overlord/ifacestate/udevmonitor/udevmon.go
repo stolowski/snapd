@@ -42,11 +42,11 @@ type EnumerationDoneFunc func()
 
 // Monitor monitors kernel uevents making it possible to find USB devices.
 type Monitor struct {
-	tomb          tomb.Tomb
-	deviceAdded   DeviceAddedFunc
-	deviceRemoved DeviceRemovedFunc
+	tomb            tomb.Tomb
+	deviceAdded     DeviceAddedFunc
+	deviceRemoved   DeviceRemovedFunc
 	enumerationDone func()
-	netlinkConn   *netlink.UEventConn
+	netlinkConn     *netlink.UEventConn
 	// channels used by netlink connection and monitor
 	monitorStop   chan struct{}
 	netlinkErrors chan error
@@ -64,11 +64,11 @@ type Monitor struct {
 
 func New(added DeviceAddedFunc, removed DeviceRemovedFunc, enumerationDone EnumerationDoneFunc) Interface {
 	m := &Monitor{
-		deviceAdded:   added,
-		deviceRemoved: removed,
+		deviceAdded:     added,
+		deviceRemoved:   removed,
 		enumerationDone: enumerationDone,
-		netlinkConn:   &netlink.UEventConn{},
-		seen:          make(map[string]bool),
+		netlinkConn:     &netlink.UEventConn{},
+		seen:            make(map[string]bool),
 	}
 
 	m.netlinkEvents = make(chan netlink.UEvent)
@@ -103,6 +103,11 @@ func (m *Monitor) Connect() error {
 			{
 				Env: map[string]string{
 					"SUBSYSTEM": "net",
+				},
+			},
+			{
+				Env: map[string]string{
+					"SUBSYSTEM": "usb",
 				},
 			},
 		},

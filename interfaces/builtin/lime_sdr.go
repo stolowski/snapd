@@ -30,7 +30,7 @@ import (
 	"github.com/snapcore/snapd/snap"
 )
 
-const limeSdrSummary = `allows accessing a specific serial port`
+const limeSdrSummary = `allows accessing Lime SDR`
 
 const limeSdrBaseDeclarationSlots = `
   lime-sdr:
@@ -116,4 +116,8 @@ func (iface *limeSdrInterface) AppArmorConnectedPlug(spec *apparmor.Specificatio
 func (iface *limeSdrInterface) AutoConnect(*snap.PlugInfo, *snap.SlotInfo) bool {
 	// allow what declarations allowed
 	return true
+}
+
+func init() {
+	registerIface(&limeSdrInterface{})
 }
