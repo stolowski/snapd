@@ -367,10 +367,8 @@ const maxGenerateSlotNameLen = 20
 // In addition names are truncated not to exceed maxGenerateSlotNameLen characters.
 func makeSlotName(s string) string {
 	var out []rune
-	var charCount int
 	// the dash flag is used to prevent consecutive dashes, and the dash in the front
 	dash := true
-Loop:
 	for _, c := range s {
 		switch {
 		case c == '-' && !dash:
@@ -379,19 +377,14 @@ Loop:
 		case unicode.IsLetter(c):
 			out = append(out, unicode.ToLower(c))
 			dash = false
-			charCount++
-			if charCount >= maxGenerateSlotNameLen {
-				break Loop
-			}
-		case unicode.IsDigit(c) && charCount > 0:
+		case unicode.IsDigit(c) && len(out) > 0:
 			out = append(out, c)
 			dash = false
-			charCount++
-			if charCount >= maxGenerateSlotNameLen {
-				break Loop
-			}
 		default:
 			// any other character is ignored
+		}
+		if len(out) >= maxGenerateSlotNameLen {
+			break
 		}
 	}
 	// make sure the name doesn't end with a dash
@@ -405,24 +398,19 @@ var nameAttrs = []string{"NAME", "ID_MODEL_FROM_DATABASE", "ID_MODEL"}
 // name from. The name created from attributes is sanitized to ensure it's a
 // valid slot name. The fallbackName is typically the name of the interface.
 func suggestedSlotName(devinfo *hotplug.HotplugDeviceInfo, fallbackName string) string {
-	var candidates []string
+	var shortestName string
 	for _, attr := range nameAttrs {
 		name, ok := devinfo.Attribute(attr)
 		if ok {
-			name = makeSlotName(name)
-			if name != "" {
-				candidates = append(candidates, name)
+			if name := makeSlotName(name); name != "" {
+				if shortestName == "" || len(name) < len(shortestName) {
+					shortestName = name
+				}
 			}
 		}
 	}
-	if len(candidates) == 0 {
+	if len(shortestName) == 0 {
 		return fallbackName
-	}
-	shortestName := candidates[0]
-	for _, cand := range candidates[1:] {
-		if len(cand) < len(shortestName) {
-			shortestName = cand
-		}
 	}
 	return shortestName
 }
