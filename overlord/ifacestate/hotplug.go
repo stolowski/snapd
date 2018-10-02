@@ -210,9 +210,12 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 			m.enumeratedDeviceKeys[iface.Name()][key] = true
 		}
 
+		devPath := devinfo.DevicePath()
+		m.hotplugDevicePaths[devPath] = append(m.hotplugDevicePaths[devPath], deviceData{deviceKey: key, ifaceName: iface.Name()})
+
 		logger.Noticef("Added hotplug slot %s:%s of interface %s for device key %q", slot.Snap.InstanceName(), slot.Name, slot.Interface, key)
 
-		chg := st.NewChange(fmt.Sprintf("hotplug-connect-%s", iface), fmt.Sprintf("Connect hotplug slot of interface %s", iface))
+		chg := st.NewChange(fmt.Sprintf("hotplug-connect-%s", iface), fmt.Sprintf("Connect hotplug slot of interface %s", iface.Name()))
 		hotplugConnect := st.NewTask("hotplug-connect", fmt.Sprintf("Recreate connections of device %q", key))
 		hotplugTaskSetAttrs(hotplugConnect, key, iface.Name())
 		chg.AddTask(hotplugConnect)
@@ -232,20 +235,14 @@ func (m *InterfaceManager) hotplugDeviceRemoved(devinfo *hotplug.HotplugDeviceIn
 		return
 	}
 
-	defaultKey := defaultDeviceKey(devinfo)
-	for _, iface := range m.repo.AllHotplugInterfaces() {
-		// determine device key for the interface; note that interface might provide own device keys.
-		key, err := deviceKey(defaultKey, devinfo, iface)
-		if err != nil {
-			logger.Debugf(err.Error())
-			continue
-		}
+	devPath := devinfo.DevicePath()
+	devs := m.hotplugDevicePaths[devPath]
+	delete(m.hotplugDevicePaths, devPath)
 
-		if key == "" {
-			continue
-		}
-
-		hasSlots, err := m.repo.HasHotplugSlot(key, iface.Name())
+	for _, dev := range devs {
+		deviceKey := dev.deviceKey
+		ifaceName := dev.ifaceName
+		hasSlots, err := m.repo.HasHotplugSlot(deviceKey, ifaceName)
 		if err != nil {
 			logger.Noticef(err.Error())
 			continue
@@ -255,17 +252,19 @@ func (m *InterfaceManager) hotplugDeviceRemoved(devinfo *hotplug.HotplugDeviceIn
 		}
 
 		if !hotplugFeature {
-			logger.Noticef("Hotplug 'remove' event for device %q (interface %q) ignored, enable experimental.hotplug", devinfo.DevicePath(), iface.Name())
+			logger.Noticef("Hotplug 'remove' event for device %q (interface %q) ignored, enable experimental.hotplug", devinfo.DevicePath(), ifaceName)
 			continue
 		}
+		logger.Debugf("HotplugDeviceRemoved: %s (interface: %s, device key: %q, devname %s, subsystem: %s)", devinfo.DevicePath(), ifaceName, deviceKey, devinfo.DeviceName(), devinfo.Subsystem())
 
-		logger.Debugf("HotplugDeviceRemoved: %s (interface: %s, device key: %q, devname %s, subsystem: %s)", devinfo.DevicePath(), iface, key, devinfo.DeviceName(), devinfo.Subsystem())
-
-		chg := st.NewChange(fmt.Sprintf("hotplug-remove-%s", iface), fmt.Sprintf("Remove hotplug connections and slots of interface %s", iface))
-		ts := removeDevice(st, key, iface.Name())
+		chg := st.NewChange(fmt.Sprintf("hotplug-remove-%s", ifaceName), fmt.Sprintf("Remove hotplug connections and slots of interface %s", ifaceName))
+		ts := removeDevice(st, deviceKey, ifaceName)
 		chg.AddAll(ts)
 	}
-	st.EnsureBefore(0)
+
+	if len(devs) > 0 {
+		st.EnsureBefore(0)
+	}
 }
 
 // create tasks to disconnect slots of given device and remove affected slots.

@@ -20,6 +20,7 @@
 package ifacestate_test
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/snapcore/snapd/dirs"
@@ -313,6 +314,9 @@ func (s *hotplugSuite) TestHotplugRemove(c *C) {
 	}, nil, nil, nil)
 	c.Assert(err, IsNil)
 	c.Assert(conn, NotNil)
+
+	restore := s.mgr.MockObservedDevicePath(filepath.Join(dirs.SysfsDir, "a/path"), "key-1", "test-a")
+	defer restore()
 
 	st.Unlock()
 
