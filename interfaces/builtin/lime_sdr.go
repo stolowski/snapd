@@ -27,6 +27,7 @@ import (
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/hotplug"
+	"github.com/snapcore/snapd/interfaces/seccomp"
 	"github.com/snapcore/snapd/snap"
 )
 
@@ -38,6 +39,34 @@ const limeSdrBaseDeclarationSlots = `
       slot-snap-type:
         - core
     deny-auto-connection: true
+`
+
+const limeSdrConnectedPlugApparmor = `
+# for receiving kobject_uevent() net messages from the kernel
+network netlink raw,
+
+# Allow detection of usb devices. Leaks plugged in USB device info
+/sys/bus/usb/devices/ r,
+
+/run/udev/data/###MAJOR###:###MINOR### r,
+/run/udev/data/+usb:* r,
+
+# for read/write access to specific usb device
+###USB_DEVICE### rw,
+
+###SYSFS_PATH### r,
+###SYSFS_PATH###/** r,
+
+`
+
+const limeSdrConnectedPlugSeccomp = `
+# Description: Can access Unity7. Note, Unity 7 runs on X and requires access
+# to various DBus services and this environment does not prevent eavesdropping
+# or apps interfering with one another.
+
+# Needed by QtSystems on X to detect mouse and keyboard
+socket AF_NETLINK - NETLINK_KOBJECT_UEVENT
+bind
 `
 
 var limeSdrProducts = []string{"04b4/8613/", "04b4/00f1/", "0403/601f/", "1d50/6108/"}
@@ -69,7 +98,10 @@ func (iface *limeSdrInterface) HotplugDeviceDetected(di *hotplug.HotplugDeviceIn
 	if model, ok := di.Attribute("ID_MODEL"); ok && strings.HasPrefix(model, "LimeSDR-USB") {
 		slot := hotplug.RequestedSlotSpec{
 			Attrs: map[string]interface{}{
-				"path": filepath.Clean(di.DeviceName()),
+				"path":      filepath.Clean(di.DeviceName()),
+				"sysfspath": filepath.Clean(di.DevicePath()),
+				"major":     di.Major(),
+				"minor":     di.Minor(),
 			},
 		}
 		return spec.SetSlot(&slot)
@@ -86,15 +118,35 @@ func (iface *limeSdrInterface) BeforePrepareSlot(slot *snap.SlotInfo) error {
 	if err := slot.Attr("path", &path); err != nil {
 		return fmt.Errorf("lime-sdr slot must have a path attribute: %s", err)
 	}
+	// TODO: sysfspath
 	return nil
 }
 
 func (iface *limeSdrInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.ConnectedPlug, slot *interfaces.ConnectedSlot) error {
-	var path string
+	var path, sysfsPath, major, minor string
 	if err := slot.Attr("path", &path); err != nil {
 		return err
 	}
-	spec.AddSnippet(fmt.Sprintf("%s rw,", path))
+	if err := slot.Attr("sysfspath", &sysfsPath); err != nil {
+		return err
+	}
+	if err := slot.Attr("major", &major); err != nil {
+		return err
+	}
+	if err := slot.Attr("minor", &minor); err != nil {
+		return err
+	}
+
+	snippet := strings.Replace(limeSdrConnectedPlugApparmor, "###USB_DEVICE###", path, -1)
+	snippet = strings.Replace(snippet, "###SYSFS_PATH###", sysfsPath, -1)
+	snippet = strings.Replace(snippet, "###MAJOR###", major, -1)
+	snippet = strings.Replace(snippet, "###MINOR###", minor, -1)
+	spec.AddSnippet(snippet)
+	return nil
+}
+
+func (iface *limeSdrInterface) SecCompConnectedPlug(spec *seccomp.Specification, plug *interfaces.ConnectedPlug, slot *interfaces.ConnectedSlot) error {
+	spec.AddSnippet(limeSdrConnectedPlugSeccomp)
 	return nil
 }
 
