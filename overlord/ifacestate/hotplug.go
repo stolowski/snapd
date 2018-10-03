@@ -21,6 +21,7 @@ package ifacestate
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
@@ -139,6 +140,29 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 
 		logger.Debugf("HotplugDeviceAdded: %s (interface: %s, device key: %q, devname %s, subsystem: %s)", devinfo.DevicePath(), iface, key, devinfo.DeviceName(), devinfo.Subsystem())
 
+		if m.enumeratedDeviceKeys != nil {
+			if m.enumeratedDeviceKeys[iface.Name()] == nil {
+				m.enumeratedDeviceKeys[iface.Name()] = make(map[string]bool)
+			}
+			m.enumeratedDeviceKeys[iface.Name()][key] = true
+		}
+		devPath := devinfo.DevicePath()
+		m.hotplugDevicePaths[devPath] = append(m.hotplugDevicePaths[devPath], deviceData{deviceKey: key, ifaceName: iface.Name()})
+
+		// if we know this slot already, check if its static attributes changed - if so, we need to update the repo and connections (if any)
+		slot, err := m.repo.SlotForDeviceKey(key, iface.Name())
+		if err != nil {
+			logger.Noticef("internal error: %s", err)
+		}
+		if slot != nil {
+			if reflect.DeepEqual(slotSpec.Attrs, slot.Attrs) {
+				// slot attributes unchanged, nothing to do
+				return
+			}
+			// TODO: update slot and connections
+			return
+		}
+
 		stateSlots, err := getHotplugSlots(st)
 		if err != nil {
 			logger.Noticef(err.Error())
@@ -176,7 +200,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 			}
 			return m.repo.Slot(coreSnapInfo.InstanceName(), name) == nil
 		})
-		slot := &snap.SlotInfo{
+		slot = &snap.SlotInfo{
 			Name:             proposedName,
 			Label:            label,
 			Snap:             coreSnapInfo,
@@ -192,7 +216,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 		}
 
 		if err := m.repo.AddSlot(slot); err != nil {
-			logger.Noticef("Failed to create slot %q for interface %s", slot.Name, slot.Interface)
+			logger.Noticef("Failed to create slot %q for interface %s: %s", slot.Name, slot.Interface, err)
 			continue
 		}
 		stateSlots[slot.Name] = HotplugSlotDef{
@@ -202,16 +226,6 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 			HotplugDeviceKey: slot.HotplugDeviceKey,
 		}
 		setHotplugSlots(st, stateSlots)
-
-		if m.enumeratedDeviceKeys != nil {
-			if m.enumeratedDeviceKeys[iface.Name()] == nil {
-				m.enumeratedDeviceKeys[iface.Name()] = make(map[string]bool)
-			}
-			m.enumeratedDeviceKeys[iface.Name()][key] = true
-		}
-
-		devPath := devinfo.DevicePath()
-		m.hotplugDevicePaths[devPath] = append(m.hotplugDevicePaths[devPath], deviceData{deviceKey: key, ifaceName: iface.Name()})
 
 		logger.Noticef("Added hotplug slot %s:%s of interface %s for device key %q", slot.Snap.InstanceName(), slot.Name, slot.Interface, key)
 
