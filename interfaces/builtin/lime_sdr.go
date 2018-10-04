@@ -28,6 +28,7 @@ import (
 	"github.com/snapcore/snapd/interfaces/apparmor"
 	"github.com/snapcore/snapd/interfaces/hotplug"
 	"github.com/snapcore/snapd/interfaces/seccomp"
+	"github.com/snapcore/snapd/interfaces/udev"
 	"github.com/snapcore/snapd/snap"
 )
 
@@ -48,12 +49,16 @@ network netlink raw,
 # Allow detection of usb devices. Leaks plugged in USB device info
 /sys/bus/usb/devices/ r,
 
-/run/udev/data/###MAJOR###:###MINOR### r,
+# FIXME: remove
+##/run/udev/data/c* r,
+/run/udev/data/c###MAJOR###:###MINOR### r,
 /run/udev/data/+usb:* r,
 
 # for read/write access to specific usb device
 ###USB_DEVICE### rw,
 
+# FIXME: remove
+/sys/devices/** r,
 ###SYSFS_PATH### r,
 ###SYSFS_PATH###/** r,
 
@@ -96,12 +101,28 @@ func (iface *limeSdrInterface) HotplugDeviceDetected(di *hotplug.HotplugDeviceIn
 		return nil
 	}
 	if model, ok := di.Attribute("ID_MODEL"); ok && strings.HasPrefix(model, "LimeSDR-USB") {
+		vendor, ok := di.Attribute("ID_VENDOR_ID")
+		if !ok {
+			return fmt.Errorf("missing ID_VENDOR_ID attribute")
+		}
+		product, ok := di.Attribute("ID_MODEL_ID")
+		if !ok {
+			return fmt.Errorf("missing ID_MODEL_ID attribute")
+		}
+		serial, ok := di.Attribute("ID_SERIAL_SHORT")
+		if !ok {
+			return fmt.Errorf("missing ID_SERIAL_SHORT attribute")
+		}
+
 		slot := hotplug.RequestedSlotSpec{
 			Attrs: map[string]interface{}{
 				"path":      filepath.Clean(di.DeviceName()),
 				"sysfspath": filepath.Clean(di.DevicePath()),
 				"major":     di.Major(),
 				"minor":     di.Minor(),
+				"vendor":    vendor,
+				"product":   product,
+				"serial":    serial,
 			},
 		}
 		return spec.SetSlot(&slot)
@@ -119,6 +140,48 @@ func (iface *limeSdrInterface) BeforePrepareSlot(slot *snap.SlotInfo) error {
 		return fmt.Errorf("lime-sdr slot must have a path attribute: %s", err)
 	}
 	// TODO: sysfspath
+	return nil
+}
+
+/*
+func (iface *limeSdrInterface) UDevPermanentSlot(spec *udev.Specification, slot *snap.SlotInfo) error {
+	var vendor, product, serial string
+	if err := slot.Attr("vendor", &vendor); err != nil {
+		return nil
+	}
+	if err := slot.Attr("product", &product); err != nil {
+		return nil
+	}
+	if err := slot.Attr("serial", &serial); err != nil {
+		return nil
+	}
+
+	spec.TagDevice(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s"`, vendor, product, serial))
+	// FIXME: remove
+	spec.AddSnippet(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s", SYMLINK+="stream-%%k"`, vendor, product, serial))
+	return nil
+}*/
+
+func (iface *limeSdrInterface) UDevConnectedPlug(spec *udev.Specification, plug *interfaces.ConnectedPlug, slot *interfaces.ConnectedSlot) error {
+	var vendor, product, serial string
+	if err := slot.Attr("vendor", &vendor); err != nil {
+		return nil
+	}
+	if err := slot.Attr("product", &product); err != nil {
+		return nil
+	}
+	if err := slot.Attr("serial", &serial); err != nil {
+		return nil
+	}
+
+	spec.TagDevice(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s"`, vendor, product))
+	//spec.TagDevice(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s"`, vendor, product, serial))
+	// FIXME: remove
+	spec.AddSnippet(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s", SYMLINK+="stream-%%k"`, vendor, product, serial))
+	/*
+			spec.AddSnippet(fmt.Sprintf(`# LimeSDR
+		SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s", SYMLINK+="stream-%%k" TAG+="uaccess"`, vendor, product, serial))
+	*/
 	return nil
 }
 

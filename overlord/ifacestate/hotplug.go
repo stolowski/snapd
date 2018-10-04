@@ -155,6 +155,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 			logger.Noticef("internal error: %s", err)
 		}
 		if slot != nil {
+			logger.Debugf("Slot %s for device %s already present in the repository", slot.Name, key)
 			if reflect.DeepEqual(slotSpec.Attrs, slot.Attrs) {
 				// slot attributes unchanged, nothing to do
 				return
