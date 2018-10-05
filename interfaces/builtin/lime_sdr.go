@@ -50,7 +50,7 @@ network netlink raw,
 /sys/bus/usb/devices/ r,
 
 # FIXME: remove
-##/run/udev/data/c* r,
+/run/udev/data/c* r,
 /run/udev/data/c###MAJOR###:###MINOR### r,
 /run/udev/data/+usb:* r,
 
@@ -177,7 +177,8 @@ func (iface *limeSdrInterface) UDevConnectedPlug(spec *udev.Specification, plug 
 	spec.TagDevice(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s"`, vendor, product))
 	//spec.TagDevice(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s"`, vendor, product, serial))
 	// FIXME: remove
-	spec.AddSnippet(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s", SYMLINK+="stream-%%k"`, vendor, product, serial))
+	//spec.AddSnippet(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s", SYMLINK+="stream-%%k"`, vendor, product, serial))
+	spec.AddSnippet(fmt.Sprintf(`SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", SYMLINK+="stream-%%k", TAG+="uaccess"`, vendor, product, serial))
 	/*
 			spec.AddSnippet(fmt.Sprintf(`# LimeSDR
 		SUBSYSTEM=="usb", ATTRS{idVendor}=="%s", ATTRS{idProduct}=="%s", ATTRS{idSerial}=="%s", SYMLINK+="stream-%%k" TAG+="uaccess"`, vendor, product, serial))
