@@ -1279,11 +1279,11 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 	var recreate []string
 	for _, id := range connsForDevice {
 		conn := conns[id]
-		// the device was unplugged while connected, so it had disconnect hooks run; recreate the connection from scratch.
+		// the device was unplugged while connected, so it had disconnect hooks run; recreate the connection
 		if conn.HotplugRemoved {
 			recreate = append(recreate, id)
 		} else {
-			// TODO: we have never observed remove event for this device: check if any attributes of the slot changed.
+			// we have never observed remove event for this device: check if any attributes of the slot changed
 			slot, err := m.repo.SlotForDeviceKey(deviceKey, ifaceName)
 			if err != nil {
 				return err
@@ -1293,11 +1293,13 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 				return err
 			}
 			if reflect.DeepEqual(slot.Attrs, conn.StaticSlotAttrs) {
-				// reload the connection
+				// no change in attributes - reload the connection
 				if _, err := m.repo.Connect(connRef, conn.DynamicPlugAttrs, conn.DynamicSlotAttrs, nil); err != nil {
 					return err
-				} // else - TODO
-			} // else - TODO
+				}
+			} else {
+				logger.Debugf("Slot %s for device %s has changed, need to update (old: %q, new: %q)", slot.Name, deviceKey, slot.Attrs, conn.StaticSlotAttrs)
+			}
 		}
 	}
 
@@ -1442,6 +1444,54 @@ Loop:
 			delete(stateSlots, slotName)
 			setHotplugSlots(st, stateSlots)
 			break
+		}
+	}
+
+	return nil
+}
+
+// doHotplugUpdateSlot updates static attributes of a hotplug slot for given device.
+func (m *InterfaceManager) doHotplugUpdateSlot(task *state.Task, _ *tomb.Tomb) error {
+	st := task.State()
+	st.Lock()
+	defer st.Unlock()
+
+	deviceKey, ifaceName, err := hotplugTaskGetAttrs(task)
+	if err != nil {
+		return err
+	}
+	var attrs map[string]interface{}
+	if err := task.Get("slot-attrs", &attrs); err != nil {
+		return fmt.Errorf("internal error: cannot get slot-attrs attribute for device %s, interface %s: %s", deviceKey, ifaceName, err)
+	}
+
+	stateSlots, err := getHotplugSlots(st)
+	if err != nil {
+		return err
+	}
+
+	slot, err := m.repo.SlotForDeviceKey(deviceKey, ifaceName)
+	if err != nil {
+		return fmt.Errorf("internal error: cannot determine slot for device %s, interface %s: %s", deviceKey, ifaceName, err)
+	}
+	if slot != nil {
+		conns, err := m.repo.ConnectionsForDeviceKey(deviceKey, ifaceName)
+		if err != nil {
+			return fmt.Errorf("internal error: cannot determine connections for device %s, interface %s: %s", deviceKey, ifaceName, err)
+		}
+		if len(conns) > 0 {
+			return fmt.Errorf("internal error: cannot update slot %s while connected", slot.Name)
+		}
+
+		if slotSpec, ok := stateSlots[slot.Name]; ok {
+			slotSpec.StaticAttrs = attrs
+			stateSlots[slot.Name] = slotSpec
+			setHotplugSlots(st, stateSlots)
+
+			// XXX: this is ugly and relies on the slot infos being kept as pointers in the repository
+			slot.Attrs = attrs
+		} else {
+			return fmt.Errorf("internal error: cannot find slot %s for device %s", slot.Name, deviceKey)
 		}
 	}
 

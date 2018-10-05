@@ -90,6 +90,7 @@ func Manager(s *state.State, hookManager *hookstate.HookManager, runner *state.T
 	addHandler("auto-disconnect", m.doAutoDisconnect, nil)
 	addHandler("hotplug-connect", m.doHotplugConnect, nil)
 	addHandler("hotplug-disconnect", m.doHotplugDisconnect, nil)
+	addHandler("hotplug-update-slot", m.doHotplugUpdateSlot, nil)
 	addHandler("hotplug-remove-slot", m.doHotplugRemoveSlot, nil)
 
 	// helper for ubuntu-core -> core
