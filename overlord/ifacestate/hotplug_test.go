@@ -257,6 +257,7 @@ func (s *hotplugSuite) TestHotplugAddWithDefaultKey(c *C) {
 }
 
 func (s *hotplugSuite) TestHotplugAddWithAutoconnect(c *C) {
+	s.mockModel(c, nil)
 	repo := s.mgr.Repository()
 	st := s.state
 
@@ -284,7 +285,6 @@ func (s *hotplugSuite) TestHotplugAddWithAutoconnect(c *C) {
 	s.udevMon.AddDevice(di)
 
 	c.Assert(s.o.Settle(5*time.Second), IsNil)
-
 	st.Lock()
 	defer st.Unlock()
 
