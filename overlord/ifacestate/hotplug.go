@@ -170,7 +170,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 		if slot != nil {
 			if reflect.DeepEqual(slotSpec.Attrs, slot.Attrs) {
 				// slot attributes unchanged, nothing to do
-				logger.Debugf("Slot %s for device %s already present and same", slot.Name, key)
+				logger.Debugf("Slot %s for device %s already present and unchanged", slot.Name, key)
 			} else {
 				logger.Debugf("Slot %s for device %s has changed", slot.Name, key)
 				ts := updateDevice(st, key, iface.Name(), slotSpec.Attrs)

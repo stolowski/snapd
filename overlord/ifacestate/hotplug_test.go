@@ -23,12 +23,16 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/snapcore/snapd/asserts"
+	"github.com/snapcore/snapd/asserts/assertstest"
 	"github.com/snapcore/snapd/dirs"
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/hotplug"
 	"github.com/snapcore/snapd/interfaces/ifacetest"
 	"github.com/snapcore/snapd/overlord"
+	"github.com/snapcore/snapd/overlord/assertstate"
+	"github.com/snapcore/snapd/overlord/auth"
 	"github.com/snapcore/snapd/overlord/configstate/config"
 	"github.com/snapcore/snapd/overlord/hookstate"
 	"github.com/snapcore/snapd/overlord/ifacestate"
@@ -44,8 +48,13 @@ import (
 
 type hotplugSuite struct {
 	testutil.BaseTest
-	o       *overlord.Overlord
-	state   *state.State
+	o     *overlord.Overlord
+	state *state.State
+
+	db           *asserts.Database
+	storeSigning *assertstest.StoreStack
+	brandSigning *assertstest.SigningDB
+
 	udevMon *udevMonitorMock
 	mgr     *ifacestate.InterfaceManager
 }
@@ -58,6 +67,35 @@ func (s *hotplugSuite) SetUpTest(c *C) {
 	dirs.SetRootDir(c.MkDir())
 	s.o = overlord.Mock()
 	s.state = s.o.State()
+
+	s.storeSigning = assertstest.NewStoreStack("canonical", nil)
+	brandPrivKey, _ := assertstest.GenerateKey(752)
+	s.brandSigning = assertstest.NewSigningDB("my-brand", brandPrivKey)
+
+	db, err := asserts.OpenDatabase(&asserts.DatabaseConfig{
+		Backstore: asserts.NewMemoryBackstore(),
+		Trusted:   s.storeSigning.Trusted,
+	})
+	c.Assert(err, IsNil)
+	s.db = db
+	err = db.Add(s.storeSigning.StoreAccountKey(""))
+	c.Assert(err, IsNil)
+
+	s.state.Lock()
+	assertstate.ReplaceDB(s.state, s.db)
+
+	brandAcct := assertstest.NewAccount(s.storeSigning, "my-brand", map[string]interface{}{
+		"account-id": "my-brand",
+	}, "")
+	err = assertstate.Add(s.state, brandAcct)
+	c.Assert(err, IsNil)
+
+	brandPubKey, err := s.brandSigning.PublicKey("")
+	c.Assert(err, IsNil)
+	brandAccKey := assertstest.NewAccountKey(s.storeSigning, brandAcct, nil, brandPubKey, "")
+	err = assertstate.Add(s.state, brandAccKey)
+	c.Assert(err, IsNil)
+	s.state.Unlock()
 
 	restoreTimeout := ifacestate.MockUDevInitRetryTimeout(0 * time.Second)
 	s.BaseTest.AddCleanup(restoreTimeout)
@@ -105,6 +143,7 @@ func (s *hotplugSuite) SetUpTest(c *C) {
 				Name: "hotplugslot-a",
 				Attrs: map[string]interface{}{
 					"slot-a-attr1": "a",
+					"path":         deviceInfo.DevicePath(),
 				},
 			})
 		},
@@ -178,6 +217,7 @@ func (s *hotplugSuite) TestHotplugAdd(c *C) {
 	c.Assert(slots, HasLen, 1)
 	c.Assert(slots[0].Name, Equals, "hotplugslot-a")
 	c.Assert(slots[0].Attrs, DeepEquals, map[string]interface{}{
+		"path":         di.DevicePath(),
 		"slot-a-attr1": "a",
 	})
 	c.Assert(slots[0].HotplugDeviceKey, Equals, "key-1")
@@ -283,7 +323,7 @@ func (s *hotplugSuite) TestHotplugRemove(c *C) {
 
 	repo := s.mgr.Repository()
 
-	si := &snap.SideInfo{Revision: snap.R(1)}
+	si := &snap.SideInfo{RealName: "consumer", Revision: snap.R(1)}
 	testSnap := snaptest.MockSnapInstance(c, "", testSnapYaml, si)
 	c.Assert(repo.AddPlug(&snap.PlugInfo{
 		Interface: "test-a",
@@ -365,7 +405,7 @@ func (s *hotplugSuite) TestHotplugEnumerationDone(c *C) {
 
 	repo := s.mgr.Repository()
 
-	si := &snap.SideInfo{Revision: snap.R(1)}
+	si := &snap.SideInfo{RealName: "consumer", Revision: snap.R(1)}
 	testSnap := snaptest.MockSnapInstance(c, "", testSnapYaml, si)
 	c.Assert(repo.AddPlug(&snap.PlugInfo{
 		Interface: "test-a",
@@ -456,10 +496,140 @@ func (s *hotplugSuite) TestHotplugEnumerationDone(c *C) {
 	c.Assert(st.Get("hotplug-slots", &newHotplugSlots), IsNil)
 	c.Assert(newHotplugSlots, DeepEquals, map[string]interface{}{
 		"hotplugslot-a": map[string]interface{}{
-			"interface": "test-a", "static-attrs": map[string]interface{}{"slot-a-attr1": "a"}, "device-key": "key-1", "name": "hotplugslot-a"},
+			"interface": "test-a", "static-attrs": map[string]interface{}{"slot-a-attr1": "a", "path": di.DevicePath()}, "device-key": "key-1", "name": "hotplugslot-a"},
 		"hotplugslot-b": map[string]interface{}{
 			"name": "hotplugslot-b", "interface": "test-b", "device-key": "key-2"},
 		"hotplugslot": map[string]interface{}{"name": "hotplugslot", "interface": "test-a", "device-key": "key-other-device"}})
+}
+
+func (s *hotplugSuite) mockModel(c *C, extraHeaders map[string]interface{}) {
+	headers := map[string]interface{}{
+		"series":       "16",
+		"brand-id":     "my-brand",
+		"model":        "my-model",
+		"gadget":       "gadget",
+		"kernel":       "krnl",
+		"architecture": "amd64",
+		"timestamp":    time.Now().Format(time.RFC3339),
+	}
+	for k, v := range extraHeaders {
+		headers[k] = v
+	}
+	model, err := s.brandSigning.Sign(asserts.ModelType, headers, nil, "")
+	c.Assert(err, IsNil)
+	s.state.Lock()
+	defer s.state.Unlock()
+	err = assertstate.Add(s.state, model)
+	c.Assert(err, IsNil)
+	err = auth.SetDevice(s.state, &auth.DeviceState{
+		Brand: "my-brand",
+		Model: "my-model",
+	})
+	c.Assert(err, IsNil)
+}
+
+func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
+	s.mockModel(c, nil)
+	st := s.state
+	st.Lock()
+
+	// existing connection
+	conns := map[string]interface{}{
+		"consumer:plug core:hotplugslot-a": map[string]interface{}{
+			"interface":       "test-a",
+			"hotplug-key":     "key-1",
+			"hotplug-removed": false,
+			"slot-static":     map[string]interface{}{"path": "/path-1"},
+		},
+	}
+	st.Set("conns", conns)
+
+	repo := s.mgr.Repository()
+
+	si := &snap.SideInfo{RealName: "consumer", Revision: snap.R(1)}
+	testSnap := snaptest.MockSnapInstance(c, "", testSnapYaml, si)
+	c.Assert(repo.AddPlug(&snap.PlugInfo{
+		Interface: "test-a",
+		Name:      "plug",
+		Attrs:     map[string]interface{}{},
+		Snap:      testSnap,
+	}), IsNil)
+	snapstate.Set(s.state, "consumer", &snapstate.SnapState{
+		Active:   true,
+		Sequence: []*snap.SideInfo{si},
+		Current:  snap.R(1),
+		SnapType: "app",
+	})
+
+	core, err := snapstate.CoreInfo(s.state)
+	c.Assert(err, IsNil)
+	c.Assert(repo.AddSlot(&snap.SlotInfo{
+		Interface:        "test-a",
+		Name:             "hotplugslot-a",
+		Attrs:            map[string]interface{}{"path": "/path-1"},
+		Snap:             core,
+		HotplugDeviceKey: "key-1",
+	}), IsNil)
+
+	conn, err := repo.Connect(&interfaces.ConnRef{
+		PlugRef: interfaces.PlugRef{Snap: "consumer", Name: "plug"},
+		SlotRef: interfaces.SlotRef{Snap: "core", Name: "hotplugslot-a"},
+	}, nil, nil, nil, nil, nil)
+	c.Assert(err, IsNil)
+	c.Assert(conn, NotNil)
+
+	hotplugSlots := map[string]interface{}{
+		"hotplugslot-a": map[string]interface{}{
+			"name":         "hotplugslot-a",
+			"interface":    "test-a",
+			"device-key":   "key-1",
+			"static-attrs": map[string]interface{}{"path": "/path-1"},
+		},
+	}
+	st.Set("hotplug-slots", hotplugSlots)
+	st.Unlock()
+
+	// simulate device update
+	di, err := hotplug.NewHotplugDeviceInfo(map[string]string{
+		"DEVPATH":   "a/path",
+		"ACTION":    "add",
+		"SUBSYSTEM": "foo",
+	})
+	c.Assert(err, IsNil)
+	s.udevMon.AddDevice(di)
+	s.udevMon.EnumerationDone()
+
+	c.Assert(s.o.Settle(5*time.Second), IsNil)
+
+	s.state.Lock()
+	defer s.state.Unlock()
+
+	// make sure slots for new device have been updated in the repo
+	slot, err := repo.SlotForDeviceKey("key-1", "test-a")
+	c.Assert(err, IsNil)
+	c.Assert(slot.Attrs, DeepEquals, map[string]interface{}{"path": di.DevicePath(), "slot-a-attr1": "a"})
+
+	// and the connection attributes have been updated
+	var newconns map[string]interface{}
+	c.Assert(st.Get("conns", &newconns), IsNil)
+	c.Assert(newconns, DeepEquals, map[string]interface{}{
+		"consumer:plug core:hotplugslot-a": map[string]interface{}{
+			"hotplug-key": "key-1",
+			"interface":   "test-a",
+			"slot-static": map[string]interface{}{"path": di.DevicePath(), "slot-a-attr1": "a"},
+		}})
+
+	var newHotplugSlots map[string]interface{}
+	c.Assert(st.Get("hotplug-slots", &newHotplugSlots), IsNil)
+
+	c.Assert(newHotplugSlots["hotplugslot-a"], DeepEquals, map[string]interface{}{
+		"interface": "test-a",
+		"static-attrs": map[string]interface{}{
+			"slot-a-attr1": "a",
+			"path":         di.DevicePath(),
+		},
+		"device-key": "key-1",
+		"name":       "hotplugslot-a"})
 }
 
 func (s *hotplugSuite) TestEnsureUniqueName(c *C) {

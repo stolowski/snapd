@@ -1300,6 +1300,7 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 				}
 			} else {
 				logger.Debugf("Slot %s for device %s has changed, need to update (old: %q, new: %q)", slot.Name, deviceKey, slot.Attrs, conn.StaticSlotAttrs)
+				recreate = append(recreate, id)
 			}
 		}
 	}
