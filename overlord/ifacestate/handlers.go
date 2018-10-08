@@ -419,7 +419,8 @@ func (m *InterfaceManager) doConnect(task *state.Task, _ *tomb.Tomb) error {
 		policyChecker = policyCheck.check
 	}
 
-	conn, err := m.repo.Connect(connRef, plugDynamicAttrs, slotDynamicAttrs, policyChecker)
+	// static attributes of the plug and slot not provided, the ones from snap infos will be used
+	conn, err := m.repo.Connect(connRef, nil, plugDynamicAttrs, nil, slotDynamicAttrs, policyChecker)
 	if err != nil || conn == nil {
 		return err
 	}
@@ -581,7 +582,7 @@ func (m *InterfaceManager) undoDisconnect(task *state.Task, _ *tomb.Tomb) error 
 		return fmt.Errorf("snap %q has no %q slot", connRef.SlotRef.Snap, connRef.SlotRef.Name)
 	}
 
-	_, err = m.repo.Connect(connRef, oldconn.DynamicPlugAttrs, oldconn.DynamicSlotAttrs, nil)
+	_, err = m.repo.Connect(connRef, nil, oldconn.DynamicPlugAttrs, nil, oldconn.DynamicSlotAttrs, nil)
 	if err != nil {
 		return err
 	}
@@ -1294,7 +1295,7 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 			}
 			if reflect.DeepEqual(slot.Attrs, conn.StaticSlotAttrs) {
 				// no change in attributes - reload the connection
-				if _, err := m.repo.Connect(connRef, conn.DynamicPlugAttrs, conn.DynamicSlotAttrs, nil); err != nil {
+				if _, err := m.repo.Connect(connRef, conn.StaticPlugAttrs, conn.DynamicPlugAttrs, conn.StaticSlotAttrs, conn.DynamicSlotAttrs, nil); err != nil {
 					return err
 				}
 			} else {

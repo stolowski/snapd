@@ -311,7 +311,7 @@ func (s *hotplugSuite) TestHotplugRemove(c *C) {
 	conn, err := repo.Connect(&interfaces.ConnRef{
 		PlugRef: interfaces.PlugRef{Snap: "consumer", Name: "plug"},
 		SlotRef: interfaces.SlotRef{Snap: "core", Name: "hotplugslot"},
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil, nil)
 	c.Assert(err, IsNil)
 	c.Assert(conn, NotNil)
 
@@ -393,7 +393,7 @@ func (s *hotplugSuite) TestHotplugEnumerationDone(c *C) {
 	conn, err := repo.Connect(&interfaces.ConnRef{
 		PlugRef: interfaces.PlugRef{Snap: "consumer", Name: "plug"},
 		SlotRef: interfaces.SlotRef{Snap: "core", Name: "hotplugslot"},
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil, nil)
 	c.Assert(err, IsNil)
 	c.Assert(conn, NotNil)
 
