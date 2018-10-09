@@ -222,7 +222,7 @@ func (s *hotplugSuite) TestHotplugAddWithDefaultKey(c *C) {
 	slots := repo.AllSlots("test-d")
 	c.Assert(slots, HasLen, 1)
 	c.Assert(slots[0].Name, Equals, "hotplugslot-d")
-	c.Assert(slots[0].HotplugDeviceKey, Equals, "/vendor/model/serial")
+	c.Assert(slots[0].HotplugDeviceKey, Equals, keyHelper("ID_VENDOR_ID\x00vendor\x00ID_MODEL_ID\x00model\x00ID_SERIAL_SHORT\x00serial\x00"))
 }
 
 func (s *hotplugSuite) TestHotplugAddWithAutoconnect(c *C) {
