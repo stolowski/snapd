@@ -403,6 +403,15 @@ func (c *autoConnectChecker) check(plug *interfaces.ConnectedPlug, slot *interfa
 		return false, err
 	}
 
+	var storeAs *asserts.Store
+	if modelAs.Store() != "" {
+		var err error
+		storeAs, err = assertstate.Store(c.st, modelAs.Store())
+		if err != nil && !asserts.IsNotFound(err) {
+			return false, err
+		}
+	}
+
 	var plugDecl *asserts.SnapDeclaration
 	if plug.Snap().SnapID != "" {
 		var err error
@@ -431,6 +440,7 @@ func (c *autoConnectChecker) check(plug *interfaces.ConnectedPlug, slot *interfa
 		SlotSnapDeclaration: slotDecl,
 		BaseDeclaration:     c.baseDecl,
 		Model:               modelAs,
+		Store:               storeAs,
 	}
 
 	return ic.CheckAutoConnect() == nil, nil
@@ -456,6 +466,15 @@ func (c *connectChecker) check(plug *interfaces.ConnectedPlug, slot *interfaces.
 	modelAs, err := devicestate.Model(c.st)
 	if err != nil {
 		return false, fmt.Errorf("cannot get model assertion: %v", err)
+	}
+
+	var storeAs *asserts.Store
+	if modelAs.Store() != "" {
+		var err error
+		storeAs, err = assertstate.Store(c.st, modelAs.Store())
+		if err != nil && !asserts.IsNotFound(err) {
+			return false, err
+		}
 	}
 
 	var plugDecl *asserts.SnapDeclaration
@@ -484,6 +503,7 @@ func (c *connectChecker) check(plug *interfaces.ConnectedPlug, slot *interfaces.
 		SlotSnapDeclaration: slotDecl,
 		BaseDeclaration:     c.baseDecl,
 		Model:               modelAs,
+		Store:               storeAs,
 	}
 
 	// if either of plug or slot snaps don't have a declaration it

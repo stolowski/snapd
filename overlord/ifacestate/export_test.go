@@ -33,9 +33,9 @@ var (
 	GetConns                     = getConns
 	SetConns                     = setConns
 	DefaultDeviceKey             = defaultDeviceKey
+	MakeSlotName                 = makeSlotName
 	EnsureUniqueName             = ensureUniqueName
 	SuggestedSlotName            = suggestedSlotName
-	MakeSlotName                 = makeSlotName
 	InSameChangeWaitChain        = inSameChangeWaitChain
 	HotplugTaskGetAttrs          = hotplugTaskGetAttrs
 	HotplugTaskSetAttrs          = hotplugTaskSetAttrs
