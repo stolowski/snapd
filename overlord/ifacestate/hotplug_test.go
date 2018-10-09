@@ -23,16 +23,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/snapcore/snapd/asserts"
-	"github.com/snapcore/snapd/asserts/assertstest"
 	"github.com/snapcore/snapd/dirs"
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/builtin"
 	"github.com/snapcore/snapd/interfaces/hotplug"
 	"github.com/snapcore/snapd/interfaces/ifacetest"
 	"github.com/snapcore/snapd/overlord"
-	"github.com/snapcore/snapd/overlord/assertstate"
-	"github.com/snapcore/snapd/overlord/auth"
 	"github.com/snapcore/snapd/overlord/configstate/config"
 	"github.com/snapcore/snapd/overlord/hookstate"
 	"github.com/snapcore/snapd/overlord/ifacestate"
@@ -48,12 +44,10 @@ import (
 
 type hotplugSuite struct {
 	testutil.BaseTest
+	ifacestate.AssertsMock
+
 	o     *overlord.Overlord
 	state *state.State
-
-	db           *asserts.Database
-	storeSigning *assertstest.StoreStack
-	brandSigning *assertstest.SigningDB
 
 	udevMon *udevMonitorMock
 	mgr     *ifacestate.InterfaceManager
@@ -68,34 +62,7 @@ func (s *hotplugSuite) SetUpTest(c *C) {
 	s.o = overlord.Mock()
 	s.state = s.o.State()
 
-	s.storeSigning = assertstest.NewStoreStack("canonical", nil)
-	brandPrivKey, _ := assertstest.GenerateKey(752)
-	s.brandSigning = assertstest.NewSigningDB("my-brand", brandPrivKey)
-
-	db, err := asserts.OpenDatabase(&asserts.DatabaseConfig{
-		Backstore: asserts.NewMemoryBackstore(),
-		Trusted:   s.storeSigning.Trusted,
-	})
-	c.Assert(err, IsNil)
-	s.db = db
-	err = db.Add(s.storeSigning.StoreAccountKey(""))
-	c.Assert(err, IsNil)
-
-	s.state.Lock()
-	assertstate.ReplaceDB(s.state, s.db)
-
-	brandAcct := assertstest.NewAccount(s.storeSigning, "my-brand", map[string]interface{}{
-		"account-id": "my-brand",
-	}, "")
-	err = assertstate.Add(s.state, brandAcct)
-	c.Assert(err, IsNil)
-
-	brandPubKey, err := s.brandSigning.PublicKey("")
-	c.Assert(err, IsNil)
-	brandAccKey := assertstest.NewAccountKey(s.storeSigning, brandAcct, nil, brandPubKey, "")
-	err = assertstate.Add(s.state, brandAccKey)
-	c.Assert(err, IsNil)
-	s.state.Unlock()
+	s.AssertsMock.MockAsserts(c, s.state)
 
 	restoreTimeout := ifacestate.MockUDevInitRetryTimeout(0 * time.Second)
 	s.BaseTest.AddCleanup(restoreTimeout)
@@ -257,7 +224,7 @@ func (s *hotplugSuite) TestHotplugAddWithDefaultKey(c *C) {
 }
 
 func (s *hotplugSuite) TestHotplugAddWithAutoconnect(c *C) {
-	s.mockModel(c, nil)
+	s.AssertsMock.MockModel(c, s.state, nil)
 	repo := s.mgr.Repository()
 	st := s.state
 
@@ -502,34 +469,8 @@ func (s *hotplugSuite) TestHotplugEnumerationDone(c *C) {
 		"hotplugslot": map[string]interface{}{"name": "hotplugslot", "interface": "test-a", "device-key": "key-other-device"}})
 }
 
-func (s *hotplugSuite) mockModel(c *C, extraHeaders map[string]interface{}) {
-	headers := map[string]interface{}{
-		"series":       "16",
-		"brand-id":     "my-brand",
-		"model":        "my-model",
-		"gadget":       "gadget",
-		"kernel":       "krnl",
-		"architecture": "amd64",
-		"timestamp":    time.Now().Format(time.RFC3339),
-	}
-	for k, v := range extraHeaders {
-		headers[k] = v
-	}
-	model, err := s.brandSigning.Sign(asserts.ModelType, headers, nil, "")
-	c.Assert(err, IsNil)
-	s.state.Lock()
-	defer s.state.Unlock()
-	err = assertstate.Add(s.state, model)
-	c.Assert(err, IsNil)
-	err = auth.SetDevice(s.state, &auth.DeviceState{
-		Brand: "my-brand",
-		Model: "my-model",
-	})
-	c.Assert(err, IsNil)
-}
-
 func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
-	s.mockModel(c, nil)
+	s.AssertsMock.MockModel(c, s.state, nil)
 	st := s.state
 	st.Lock()
 
