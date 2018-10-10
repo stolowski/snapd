@@ -1220,11 +1220,10 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 			return err
 		}
 
-		var newconns []*interfaces.ConnRef
-		// Auto-connect the slots
-
 		snapName := slot.Snap.InstanceName()
 		candidates := m.repo.AutoConnectCandidatePlugs(snapName, slot.Name, autochecker.check)
+		var newconns []*interfaces.ConnRef
+		// Auto-connect the slots
 		for _, plug := range candidates {
 			// make sure slot is the only viable
 			// connection for plug, same check as if we were
