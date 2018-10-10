@@ -164,6 +164,15 @@ func (s *hotplugSuite) TearDownTest(c *C) {
 	s.BaseTest.TearDownTest(c)
 }
 
+func testPlugSlotRefs(c *C, t *state.Task, plugSnap, plugName, slotSnap, slotName string) {
+	var plugRef interfaces.PlugRef
+	var slotRef interfaces.SlotRef
+	c.Assert(t.Get("plug", &plugRef), IsNil)
+	c.Assert(t.Get("slot", &slotRef), IsNil)
+	c.Assert(plugRef, DeepEquals, interfaces.PlugRef{Snap: plugSnap, Name: plugName})
+	c.Assert(slotRef, DeepEquals, interfaces.SlotRef{Snap: slotSnap, Name: slotName})
+}
+
 func (s *hotplugSuite) TestHotplugAddBasic(c *C) {
 	di, err := hotplug.NewHotplugDeviceInfo(map[string]string{
 		"DEVPATH":   "a/path",
@@ -302,12 +311,7 @@ func (s *hotplugSuite) TestHotplugAddWithAutoconnect(c *C) {
 			c.Assert(ok, Equals, false)
 			seenHooks[hookSup.Hook] = hookSup.Snap
 		case t.Kind() == "connect":
-			var plugRef interfaces.PlugRef
-			var slotRef interfaces.SlotRef
-			c.Assert(t.Get("plug", &plugRef), IsNil)
-			c.Assert(t.Get("slot", &slotRef), IsNil)
-			c.Assert(plugRef, DeepEquals, interfaces.PlugRef{Snap: "consumer", Name: "plug"})
-			c.Assert(slotRef, DeepEquals, interfaces.SlotRef{Snap: "core", Name: "hotplugslot-a"})
+			testPlugSlotRefs(c, t, "consumer", "plug", "core", "hotplugslot-a")
 			seenConnect++
 		case t.Kind() == "hotplug-connect":
 			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
@@ -668,20 +672,10 @@ func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
 			c.Assert(ok, Equals, false)
 			seenHooks[hookSup.Hook] = hookSup.Snap
 		case t.Kind() == "connect":
-			var plugRef interfaces.PlugRef
-			var slotRef interfaces.SlotRef
-			c.Assert(t.Get("plug", &plugRef), IsNil)
-			c.Assert(t.Get("slot", &slotRef), IsNil)
-			c.Assert(plugRef, DeepEquals, interfaces.PlugRef{Snap: "consumer", Name: "plug"})
-			c.Assert(slotRef, DeepEquals, interfaces.SlotRef{Snap: "core", Name: "hotplugslot-a"})
+			testPlugSlotRefs(c, t, "consumer", "plug", "core", "hotplugslot-a")
 			seenConnect++
 		case t.Kind() == "disconnect":
-			var plugRef interfaces.PlugRef
-			var slotRef interfaces.SlotRef
-			c.Assert(t.Get("plug", &plugRef), IsNil)
-			c.Assert(t.Get("slot", &slotRef), IsNil)
-			c.Assert(plugRef, DeepEquals, interfaces.PlugRef{Snap: "consumer", Name: "plug"})
-			c.Assert(slotRef, DeepEquals, interfaces.SlotRef{Snap: "core", Name: "hotplugslot-a"})
+			testPlugSlotRefs(c, t, "consumer", "plug", "core", "hotplugslot-a")
 			seenDisconnect++
 		case t.Kind() == "hotplug-disconnect":
 			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
