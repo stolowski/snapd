@@ -173,6 +173,13 @@ func testPlugSlotRefs(c *C, t *state.Task, plugSnap, plugName, slotSnap, slotNam
 	c.Assert(slotRef, DeepEquals, interfaces.SlotRef{Snap: slotSnap, Name: slotName})
 }
 
+func testHotplugTaskAttrs(c *C, t *state.Task, ifaceName, hotplugKey string) {
+	key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
+	c.Assert(err, IsNil)
+	c.Assert(key, Equals, hotplugKey)
+	c.Assert(iface, Equals, ifaceName)
+}
+
 func (s *hotplugSuite) TestHotplugAddBasic(c *C) {
 	di, err := hotplug.NewHotplugDeviceInfo(map[string]string{
 		"DEVPATH":   "a/path",
@@ -425,10 +432,13 @@ func (s *hotplugSuite) TestHotplugRemove(c *C) {
 	seenHooks := make(map[string]string)
 	seenKeys := make(map[string]string)
 	seenDisonnect := 0
+	seenHotplugDisconnect := 0
 	for _, t := range tasks {
 		c.Assert(t.Status(), Equals, state.DoneStatus)
 		switch {
 		case t.Kind() == "hotplug-disconnect":
+			testHotplugTaskAttrs(c, t, "test-a", "key-1")
+			seenHotplugDisconnect++
 		case t.Kind() == "run-hook":
 			var hookSup hookstate.HookSetup
 			c.Assert(t.Get("hook-setup", &hookSup), IsNil)
@@ -452,6 +462,7 @@ func (s *hotplugSuite) TestHotplugRemove(c *C) {
 	})
 	c.Assert(seenKeys, DeepEquals, map[string]string{"key-1": "test-a"})
 	c.Assert(seenDisonnect, Equals, 1)
+	c.Assert(seenHotplugDisconnect, Equals, 1)
 	c.Assert(tasks, HasLen, 5)
 
 	slot, _ = repo.SlotForDeviceKey("key-1", "test-a")
@@ -678,10 +689,7 @@ func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
 			testPlugSlotRefs(c, t, "consumer", "plug", "core", "hotplugslot-a")
 			seenDisconnect++
 		case t.Kind() == "hotplug-disconnect":
-			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
-			c.Assert(err, IsNil)
-			c.Assert(key, Equals, "key-1")
-			c.Assert(iface, Equals, "test-a")
+			testHotplugTaskAttrs(c, t, "test-a", "key-1")
 			seenHotplugDisconnect++
 		case t.Kind() == "hotplug-connect":
 			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
@@ -689,10 +697,7 @@ func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
 			seenHotplugConnectKeys[key] = iface
 			seenHotplugConnect++
 		case t.Kind() == "hotplug-update-slot":
-			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
-			c.Assert(err, IsNil)
-			c.Assert(key, Equals, "key-1")
-			c.Assert(iface, Equals, "test-a")
+			testHotplugTaskAttrs(c, t, "test-a", "key-1")
 		default:
 			c.Fatalf("unexpected task: %s", t.Kind())
 		}
