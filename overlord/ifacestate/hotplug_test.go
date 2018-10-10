@@ -588,8 +588,7 @@ func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
 			"hotplug-key":     "key-1",
 			"hotplug-removed": false,
 			"slot-static":     map[string]interface{}{"path": "/path-1"},
-		},
-	}
+		}}
 	st.Set("conns", conns)
 
 	repo := s.mgr.Repository()
@@ -632,8 +631,7 @@ func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
 			"interface":    "test-a",
 			"device-key":   "key-1",
 			"static-attrs": map[string]interface{}{"path": "/path-1"},
-		},
-	}
+		}}
 	st.Set("hotplug-slots", hotplugSlots)
 	st.Unlock()
 
@@ -651,6 +649,75 @@ func (s *hotplugSuite) TestHotplugDeviceUpdate(c *C) {
 
 	s.state.Lock()
 	defer s.state.Unlock()
+
+	// verify hotplug tasks
+	tasks := st.Tasks()
+	seenHooks := make(map[string]string)
+	seenHotplugConnectKeys := make(map[string]string)
+	seenConnect := 0
+	seenDisconnect := 0
+	seenHotplugDisconnect := 0
+	seenHotplugConnect := 0
+	for _, t := range tasks {
+		c.Assert(t.Status(), Equals, state.DoneStatus)
+		switch {
+		case t.Kind() == "run-hook":
+			var hookSup hookstate.HookSetup
+			c.Assert(t.Get("hook-setup", &hookSup), IsNil)
+			_, ok := seenHooks[hookSup.Hook]
+			c.Assert(ok, Equals, false)
+			seenHooks[hookSup.Hook] = hookSup.Snap
+		case t.Kind() == "connect":
+			var plugRef interfaces.PlugRef
+			var slotRef interfaces.SlotRef
+			c.Assert(t.Get("plug", &plugRef), IsNil)
+			c.Assert(t.Get("slot", &slotRef), IsNil)
+			c.Assert(plugRef, DeepEquals, interfaces.PlugRef{Snap: "consumer", Name: "plug"})
+			c.Assert(slotRef, DeepEquals, interfaces.SlotRef{Snap: "core", Name: "hotplugslot-a"})
+			seenConnect++
+		case t.Kind() == "disconnect":
+			var plugRef interfaces.PlugRef
+			var slotRef interfaces.SlotRef
+			c.Assert(t.Get("plug", &plugRef), IsNil)
+			c.Assert(t.Get("slot", &slotRef), IsNil)
+			c.Assert(plugRef, DeepEquals, interfaces.PlugRef{Snap: "consumer", Name: "plug"})
+			c.Assert(slotRef, DeepEquals, interfaces.SlotRef{Snap: "core", Name: "hotplugslot-a"})
+			seenDisconnect++
+		case t.Kind() == "hotplug-disconnect":
+			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
+			c.Assert(err, IsNil)
+			c.Assert(key, Equals, "key-1")
+			c.Assert(iface, Equals, "test-a")
+			seenHotplugDisconnect++
+		case t.Kind() == "hotplug-connect":
+			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
+			c.Assert(err, IsNil)
+			seenHotplugConnectKeys[key] = iface
+			seenHotplugConnect++
+		case t.Kind() == "hotplug-update-slot":
+			key, iface, err := ifacestate.HotplugTaskGetAttrs(t)
+			c.Assert(err, IsNil)
+			c.Assert(key, Equals, "key-1")
+			c.Assert(iface, Equals, "test-a")
+		default:
+			c.Fatalf("unexpected task: %s", t.Kind())
+		}
+
+	}
+	c.Assert(seenHooks, DeepEquals, map[string]string{
+		"disconnect-plug-plug":          "consumer",
+		"disconnect-slot-hotplugslot-a": "core",
+		"prepare-plug-plug":             "consumer",
+		"prepare-slot-hotplugslot-a":    "core",
+		"connect-slot-hotplugslot-a":    "core",
+		"connect-plug-plug":             "consumer"})
+	c.Assert(seenConnect, Equals, 1)
+	c.Assert(seenDisconnect, Equals, 1)
+	c.Assert(seenHotplugDisconnect, Equals, 1)
+	// we see 2 hotplug-connect tasks because of interface test-a and test-b (the latter does nothing as there is no change)
+	c.Assert(seenHotplugConnect, Equals, 2)
+	c.Assert(seenHotplugConnectKeys, DeepEquals, map[string]string{"key-1": "test-a", "key-2": "test-b"})
+	c.Assert(tasks, HasLen, 12)
 
 	// make sure slots for new device have been updated in the repo
 	slot, err := repo.SlotForDeviceKey("key-1", "test-a")
