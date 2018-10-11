@@ -174,7 +174,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 			m.enumeratedDeviceKeys[iface.Name()][key] = true
 		}
 		devPath := devinfo.DevicePath()
-		m.hotplugDevicePaths[devPath] = append(m.hotplugDevicePaths[devPath], deviceData{deviceKey: key, ifaceName: iface.Name()})
+		m.hotplugDevicePaths[devPath] = append(m.hotplugDevicePaths[devPath], deviceData{hotplugKey: key, ifaceName: iface.Name()})
 
 		stateSlots, err := getHotplugSlots(st)
 		if err != nil {
@@ -183,7 +183,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 		}
 
 		// if we know this slot already, check if its static attributes changed - if so, we need to update the repo and connections (if any)
-		slot, err := m.repo.SlotForDeviceKey(key, iface.Name())
+		slot, err := m.repo.SlotForHotplugKey(iface.Name(), key)
 		if err != nil {
 			logger.Noticef("internal error: %s", err)
 		}
@@ -195,7 +195,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 				logger.Debugf("Slot %s for device %s already present and unchanged", slot.Name, key)
 			} else {
 				logger.Debugf("Slot %s for device %s has changed", slot.Name, key)
-				ts := updateDevice(st, key, iface.Name(), slotSpec.Attrs)
+				ts := updateDevice(st, iface.Name(), key, slotSpec.Attrs)
 				chg := st.NewChange(fmt.Sprintf("hotplug-update-%s", iface), fmt.Sprintf("Update hotplug slot of interface %s, device %s", iface.Name(), key))
 				chg.AddAll(ts)
 			}
@@ -206,7 +206,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 			// - if not, use auto-generated name.
 			proposedName := slotSpec.Name
 			for _, stateSlot := range stateSlots {
-				if stateSlot.HotplugDeviceKey == key {
+				if stateSlot.HotplugKey == key {
 					proposedName = stateSlot.Name
 					break
 				}
@@ -216,17 +216,17 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 			}
 			proposedName = ensureUniqueName(proposedName, func(name string) bool {
 				if slot, ok := stateSlots[name]; ok {
-					return slot.HotplugDeviceKey == key
+					return slot.HotplugKey == key
 				}
 				return m.repo.Slot(coreSnapInfo.InstanceName(), name) == nil
 			})
 			newSlot := &snap.SlotInfo{
-				Name:             proposedName,
-				Label:            slotSpec.Label,
-				Snap:             coreSnapInfo,
-				Interface:        iface.Name(),
-				Attrs:            slotSpec.Attrs,
-				HotplugDeviceKey: key,
+				Name:       proposedName,
+				Label:      slotSpec.Label,
+				Snap:       coreSnapInfo,
+				Interface:  iface.Name(),
+				Attrs:      slotSpec.Attrs,
+				HotplugKey: key,
 			}
 			if iface, ok := iface.(interfaces.SlotSanitizer); ok {
 				if err := iface.BeforePrepareSlot(newSlot); err != nil {
@@ -239,11 +239,11 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 				logger.Noticef("Failed to create slot %q for interface %s: %s", newSlot.Name, newSlot.Interface, err)
 				continue
 			}
-			stateSlots[newSlot.Name] = HotplugSlotDef{
-				Name:             newSlot.Name,
-				Interface:        newSlot.Interface,
-				StaticAttrs:      newSlot.Attrs,
-				HotplugDeviceKey: newSlot.HotplugDeviceKey,
+			stateSlots[newSlot.Name] = &HotplugSlotInfo{
+				Name:        newSlot.Name,
+				Interface:   newSlot.Interface,
+				StaticAttrs: newSlot.Attrs,
+				HotplugKey:  newSlot.HotplugKey,
 			}
 			setHotplugSlots(st, stateSlots)
 
@@ -251,7 +251,7 @@ func (m *InterfaceManager) hotplugDeviceAdded(devinfo *hotplug.HotplugDeviceInfo
 
 			chg := st.NewChange(fmt.Sprintf("hotplug-connect-%s", iface), fmt.Sprintf("Connect hotplug slot of interface %s", iface.Name()))
 			hotplugConnect := st.NewTask("hotplug-connect", fmt.Sprintf("Recreate connections of device %q", key))
-			hotplugTaskSetAttrs(hotplugConnect, key, iface.Name())
+			setHotplugAttrs(hotplugConnect, iface.Name(), key)
 			chg.AddTask(hotplugConnect)
 		}
 		st.EnsureBefore(0)
@@ -275,14 +275,14 @@ func (m *InterfaceManager) hotplugDeviceRemoved(devinfo *hotplug.HotplugDeviceIn
 	delete(m.hotplugDevicePaths, devPath)
 
 	for _, dev := range devs {
-		deviceKey := dev.deviceKey
+		hotplugKey := dev.hotplugKey
 		ifaceName := dev.ifaceName
-		hasSlots, err := m.repo.HasHotplugSlot(deviceKey, ifaceName)
+		slot, err := m.repo.SlotForHotplugKey(ifaceName, hotplugKey)
 		if err != nil {
 			logger.Noticef(err.Error())
 			continue
 		}
-		if !hasSlots {
+		if slot == nil {
 			continue
 		}
 
@@ -290,10 +290,10 @@ func (m *InterfaceManager) hotplugDeviceRemoved(devinfo *hotplug.HotplugDeviceIn
 			logger.Noticef("Hotplug 'remove' event for device %q (interface %q) ignored, enable experimental.hotplug", devinfo.DevicePath(), ifaceName)
 			continue
 		}
-		logger.Debugf("HotplugDeviceRemoved: %s (interface: %s, device key: %q, devname %s, subsystem: %s)", devinfo.DevicePath(), ifaceName, deviceKey, devinfo.DeviceName(), devinfo.Subsystem())
+		logger.Debugf("HotplugDeviceRemoved: %s (interface: %s, hotplug key: %q, devname %s, subsystem: %s)", devinfo.DevicePath(), ifaceName, hotplugKey, devinfo.DeviceName(), devinfo.Subsystem())
 
 		chg := st.NewChange(fmt.Sprintf("hotplug-remove-%s", ifaceName), fmt.Sprintf("Remove hotplug connections and slots of interface %s", ifaceName))
-		ts := removeDevice(st, deviceKey, ifaceName)
+		ts := removeDevice(st, ifaceName, hotplugKey)
 		chg.AddAll(ts)
 	}
 
@@ -303,31 +303,31 @@ func (m *InterfaceManager) hotplugDeviceRemoved(devinfo *hotplug.HotplugDeviceIn
 }
 
 // create tasks to disconnect slots of given device and remove affected slots.
-func removeDevice(st *state.State, deviceKey, ifaceName string) *state.TaskSet {
+func removeDevice(st *state.State, ifaceName, hotplugKey string) *state.TaskSet {
 	// hotplug-disconnect task will create hooks and disconnect the slot
-	hotplugDisconnect := st.NewTask("hotplug-disconnect", fmt.Sprintf("Disable connections of device %q", deviceKey))
-	hotplugTaskSetAttrs(hotplugDisconnect, deviceKey, ifaceName)
+	hotplugDisconnect := st.NewTask("hotplug-disconnect", fmt.Sprintf("Disable connections for interface %s, hotplug key %q", ifaceName, hotplugKey))
+	setHotplugAttrs(hotplugDisconnect, ifaceName, hotplugKey)
 
 	// hotplug-remove-slot will remove this device's slot from the repository.
-	removeSlot := st.NewTask("hotplug-remove-slot", fmt.Sprintf("Remove slot for device %q, interface %q", deviceKey, ifaceName))
-	hotplugTaskSetAttrs(removeSlot, deviceKey, ifaceName)
+	removeSlot := st.NewTask("hotplug-remove-slot", fmt.Sprintf("Remove slot for interface %s, hotplug key %q", ifaceName, hotplugKey))
+	setHotplugAttrs(removeSlot, ifaceName, hotplugKey)
 	removeSlot.WaitFor(hotplugDisconnect)
 
 	return state.NewTaskSet(hotplugDisconnect, removeSlot)
 }
 
 // create tasks to disconnect slots of given device, update the slot in the repository, then connect it back.
-func updateDevice(st *state.State, deviceKey, ifaceName string, newAttrs map[string]interface{}) *state.TaskSet {
-	hotplugDisconnect := st.NewTask("hotplug-disconnect", fmt.Sprintf("Disable connections of device %q", deviceKey))
-	hotplugTaskSetAttrs(hotplugDisconnect, deviceKey, ifaceName)
+func updateDevice(st *state.State, ifaceName, hotplugKey string, newAttrs map[string]interface{}) *state.TaskSet {
+	hotplugDisconnect := st.NewTask("hotplug-disconnect", fmt.Sprintf("Disable connections of device %q", hotplugKey))
+	setHotplugAttrs(hotplugDisconnect, ifaceName, hotplugKey)
 
-	updateSlot := st.NewTask("hotplug-update-slot", fmt.Sprintf("Update slot of device %q, interface %q", deviceKey, ifaceName))
-	hotplugTaskSetAttrs(updateSlot, deviceKey, ifaceName)
+	updateSlot := st.NewTask("hotplug-update-slot", fmt.Sprintf("Update slot of interface %s, hotplug key %q", ifaceName, hotplugKey))
+	setHotplugAttrs(updateSlot, ifaceName, hotplugKey)
 	updateSlot.Set("slot-attrs", newAttrs)
 	updateSlot.WaitFor(hotplugDisconnect)
 
-	hotplugConnect := st.NewTask("hotplug-connect", fmt.Sprintf("Recreate connections of device %q", deviceKey))
-	hotplugTaskSetAttrs(hotplugConnect, deviceKey, ifaceName)
+	hotplugConnect := st.NewTask("hotplug-connect", fmt.Sprintf("Recreate connections of interface %s hotplug key %s", ifaceName, hotplugKey))
+	setHotplugAttrs(hotplugConnect, ifaceName, hotplugKey)
 	hotplugConnect.WaitFor(updateSlot)
 
 	return state.NewTaskSet(hotplugDisconnect, updateSlot, hotplugConnect)
@@ -346,13 +346,13 @@ func (m *InterfaceManager) hotplugEnumerationDone() {
 
 	for _, slot := range hotplugSlots {
 		if byIface, ok := m.enumeratedDeviceKeys[slot.Interface]; ok {
-			if byIface[slot.HotplugDeviceKey] {
+			if byIface[slot.HotplugKey] {
 				continue
 			}
 		}
 		// device not present, disconnect its slots and remove them (as if it was unplugged)
 		chg := st.NewChange(fmt.Sprintf("hotplug-remove-%s", slot.Interface), fmt.Sprintf("Remove hotplug connections and slots of interface %s", slot.Interface))
-		ts := removeDevice(st, slot.HotplugDeviceKey, slot.Interface)
+		ts := removeDevice(st, slot.Interface, slot.HotplugKey)
 		chg.AddAll(ts)
 	}
 	st.EnsureBefore(0)
@@ -361,10 +361,10 @@ func (m *InterfaceManager) hotplugEnumerationDone() {
 	m.enumeratedDeviceKeys = nil
 }
 
-func findConnsForDeviceKey(conns *map[string]connState, coreSnapName, ifaceName, deviceKey string) []string {
+func findConnsForDeviceKey(conns *map[string]connState, coreSnapName, ifaceName, hotplugKey string) []string {
 	var connsForDevice []string
 	for id, connSt := range *conns {
-		if connSt.Interface != ifaceName || connSt.HotplugDeviceKey != deviceKey {
+		if connSt.Interface != ifaceName || connSt.HotplugKey != hotplugKey {
 			continue
 		}
 		connsForDevice = append(connsForDevice, id)

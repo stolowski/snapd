@@ -47,11 +47,6 @@ func confinementOptions(flags snapstate.Flags) interfaces.ConfinementOptions {
 func (m *InterfaceManager) setupAffectedSnaps(task *state.Task, affectingSnap string, affectedSnaps []string) error {
 	st := task.State()
 
-	hotplugSlots, err := getHotplugSlots(st)
-	if err != nil {
-		return err
-	}
-
 	// Setup security of the affected snaps.
 	for _, affectedSnapName := range affectedSnaps {
 		// the snap that triggered the change needs to be skipped
@@ -67,7 +62,9 @@ func (m *InterfaceManager) setupAffectedSnaps(task *state.Task, affectingSnap st
 		if err != nil {
 			return err
 		}
-		addImplicitSlots(affectedSnapInfo, hotplugSlots)
+		if err := addImplicitSlots(st, affectedSnapInfo); err != nil {
+			return err
+		}
 		opts := confinementOptions(snapst.Flags)
 		if err := m.setupSnapSecurity(task, affectedSnapInfo, opts); err != nil {
 			return err
@@ -109,11 +106,9 @@ func (m *InterfaceManager) doSetupProfiles(task *state.Task, tomb *tomb.Tomb) er
 }
 
 func (m *InterfaceManager) setupProfilesForSnap(task *state.Task, _ *tomb.Tomb, snapInfo *snap.Info, opts interfaces.ConfinementOptions) error {
-	hotplugSlots, err := getHotplugSlots(task.State())
-	if err != nil {
+	if err := addImplicitSlots(task.State(), snapInfo); err != nil {
 		return err
 	}
-	addImplicitSlots(snapInfo, hotplugSlots)
 
 	snapName := snapInfo.InstanceName()
 
@@ -442,7 +437,7 @@ func (m *InterfaceManager) doConnect(task *state.Task, _ *tomb.Tomb) error {
 		DynamicSlotAttrs: conn.Slot.DynamicAttrs(),
 		Auto:             autoConnect,
 		ByGadget:         byGadget,
-		HotplugDeviceKey: slot.HotplugDeviceKey,
+		HotplugKey:       slot.HotplugKey,
 	}
 	setConns(st, conns)
 
@@ -513,7 +508,7 @@ func (m *InterfaceManager) doDisconnect(task *state.Task, _ *tomb.Tomb) error {
 	}
 
 	// "by-hotplug" flag indicates it's a disconnect triggered by hotplug remove event;
-	// we want to keep information of the connection and just mark it as hotplug-removed.
+	// we want to keep information of the connection and just mark it as hotplug-gone.
 	var byHotplug bool
 	if err := task.Get("by-hotplug", &byHotplug); err != nil && err != state.ErrNoState {
 		return fmt.Errorf("internal error: failed to read 'hotplug-disconnect' flag: %s", err)
@@ -521,7 +516,7 @@ func (m *InterfaceManager) doDisconnect(task *state.Task, _ *tomb.Tomb) error {
 
 	switch {
 	case byHotplug:
-		conn.HotplugRemoved = true
+		conn.HotplugGone = true
 		conns[cref.ID()] = conn
 	case conn.Auto && !autoDisconnect:
 		conn.Undesired = true
@@ -1194,23 +1189,24 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 		return err
 	}
 
-	coreSnapName, err := m.repo.GuessSystemSnapName()
+	core, err := snapstate.CoreInfo(st)
 	if err != nil {
 		return err
 	}
+	coreSnapName := core.InstanceName()
 
-	deviceKey, ifaceName, err := hotplugTaskGetAttrs(task)
+	ifaceName, hotplugKey, err := getHotplugAttrs(task)
 	if err != nil {
 		return err
 	}
 
 	// find old connections for slots of this device - note we can't ask the repository since we need
 	// to recreate old connections that are only remembered in the state.
-	connsForDevice := findConnsForDeviceKey(&conns, coreSnapName, ifaceName, deviceKey)
+	connsForDevice := findConnsForDeviceKey(&conns, coreSnapName, ifaceName, hotplugKey)
 
 	// we see this device for the first time (or it didn't have any connected slot before)
 	if len(connsForDevice) == 0 {
-		slot, err := m.repo.SlotForDeviceKey(deviceKey, ifaceName)
+		slot, err := m.repo.SlotForHotplugKey(ifaceName, hotplugKey)
 		if err != nil {
 			return err
 		}
@@ -1240,7 +1236,7 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 
 			connRef := interfaces.NewConnRef(plug, slot)
 			key := connRef.ID()
-			if conn, ok := conns[key]; ok && !conn.HotplugRemoved {
+			if conn, ok := conns[key]; ok && !conn.HotplugGone {
 				// Suggested connection already exist (or has Undesired flag set) so don't clobber it.
 				continue
 			}
@@ -1280,11 +1276,11 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 	for _, id := range connsForDevice {
 		conn := conns[id]
 		// the device was unplugged while connected, so it had disconnect hooks run; recreate the connection
-		if conn.HotplugRemoved {
+		if conn.HotplugGone {
 			recreate = append(recreate, id)
 		} else {
 			// we have never observed remove event for this device: check if any attributes of the slot changed
-			slot, err := m.repo.SlotForDeviceKey(deviceKey, ifaceName)
+			slot, err := m.repo.SlotForHotplugKey(ifaceName, hotplugKey)
 			if err != nil {
 				return err
 			}
@@ -1298,7 +1294,7 @@ func (m *InterfaceManager) doHotplugConnect(task *state.Task, _ *tomb.Tomb) erro
 					return err
 				}
 			} else {
-				logger.Debugf("Slot %s for device %s has changed, need to update (old: %q, new: %q)", slot.Name, deviceKey, slot.Attrs, conn.StaticSlotAttrs)
+				logger.Debugf("Attributes of slot %s for hotplug key %s have changed (old: %q, new: %q)", slot.Name, slot.HotplugKey, slot.Attrs, conn.StaticSlotAttrs)
 				recreate = append(recreate, id)
 			}
 		}
@@ -1350,17 +1346,18 @@ func (m *InterfaceManager) doHotplugDisconnect(task *state.Task, _ *tomb.Tomb) e
 	st.Lock()
 	defer st.Unlock()
 
-	coreSnapName, err := m.repo.GuessSystemSnapName()
+	core, err := snapstate.CoreInfo(st)
+	if err != nil {
+		return err
+	}
+	coreSnapName := core.InstanceName()
+
+	ifaceName, hotplugKey, err := getHotplugAttrs(task)
 	if err != nil {
 		return err
 	}
 
-	deviceKey, ifaceName, err := hotplugTaskGetAttrs(task)
-	if err != nil {
-		return err
-	}
-
-	connections, err := m.repo.ConnectionsForDeviceKey(deviceKey, ifaceName)
+	connections, err := m.repo.ConnectionsForHotplugKey(ifaceName, hotplugKey)
 	if err != nil {
 		return err
 	}
@@ -1408,12 +1405,12 @@ func (m *InterfaceManager) doHotplugRemoveSlot(task *state.Task, _ *tomb.Tomb) e
 	st.Lock()
 	defer st.Unlock()
 
-	deviceKey, ifaceName, err := hotplugTaskGetAttrs(task)
+	ifaceName, hotplugKey, err := getHotplugAttrs(task)
 	if err != nil {
 		return err
 	}
 
-	slot, err := m.repo.SlotForDeviceKey(deviceKey, ifaceName)
+	slot, err := m.repo.SlotForHotplugKey(ifaceName, hotplugKey)
 	if err != nil {
 		return fmt.Errorf("cannot determine slots: %s", err)
 	}
@@ -1429,16 +1426,16 @@ func (m *InterfaceManager) doHotplugRemoveSlot(task *state.Task, _ *tomb.Tomb) e
 	}
 
 	// remove the slot from hotplug-slots in the state as long as there are no connections referencing it,
-	// including connection with hotplug-removed=true.
+	// including connection with hotplug-gone=true.
 Loop:
 	for slotName, def := range stateSlots {
-		if def.HotplugDeviceKey == deviceKey && def.Interface == ifaceName {
+		if def.Interface == ifaceName && def.HotplugKey == hotplugKey {
 			conns, err := getConns(st)
 			if err != nil {
 				return err
 			}
 			for _, conn := range conns {
-				if conn.Interface == def.Interface && conn.HotplugDeviceKey == def.HotplugDeviceKey {
+				if conn.Interface == def.Interface && conn.HotplugKey == def.HotplugKey {
 					break Loop
 				}
 			}
@@ -1457,13 +1454,13 @@ func (m *InterfaceManager) doHotplugUpdateSlot(task *state.Task, _ *tomb.Tomb) e
 	st.Lock()
 	defer st.Unlock()
 
-	deviceKey, ifaceName, err := hotplugTaskGetAttrs(task)
+	ifaceName, hotplugKey, err := getHotplugAttrs(task)
 	if err != nil {
 		return err
 	}
 	var attrs map[string]interface{}
 	if err := task.Get("slot-attrs", &attrs); err != nil {
-		return fmt.Errorf("internal error: cannot get slot-attrs attribute for device %s, interface %s: %s", deviceKey, ifaceName, err)
+		return fmt.Errorf("internal error: cannot get slot-attrs attribute for device %s, interface %s: %s", hotplugKey, ifaceName, err)
 	}
 
 	stateSlots, err := getHotplugSlots(st)
@@ -1471,14 +1468,14 @@ func (m *InterfaceManager) doHotplugUpdateSlot(task *state.Task, _ *tomb.Tomb) e
 		return err
 	}
 
-	slot, err := m.repo.SlotForDeviceKey(deviceKey, ifaceName)
+	slot, err := m.repo.SlotForHotplugKey(ifaceName, hotplugKey)
 	if err != nil {
-		return fmt.Errorf("internal error: cannot determine slot for device %s, interface %s: %s", deviceKey, ifaceName, err)
+		return fmt.Errorf("internal error: cannot determine slot for device %s, interface %s: %s", hotplugKey, ifaceName, err)
 	}
 	if slot != nil {
-		conns, err := m.repo.ConnectionsForDeviceKey(deviceKey, ifaceName)
+		conns, err := m.repo.ConnectionsForHotplugKey(ifaceName, hotplugKey)
 		if err != nil {
-			return fmt.Errorf("internal error: cannot determine connections for device %s, interface %s: %s", deviceKey, ifaceName, err)
+			return fmt.Errorf("internal error: cannot determine connections for device %s, interface %s: %s", hotplugKey, ifaceName, err)
 		}
 		if len(conns) > 0 {
 			return fmt.Errorf("internal error: cannot update slot %s while connected", slot.Name)
@@ -1492,7 +1489,7 @@ func (m *InterfaceManager) doHotplugUpdateSlot(task *state.Task, _ *tomb.Tomb) e
 			// XXX: this is ugly and relies on the slot infos being kept as pointers in the repository
 			slot.Attrs = attrs
 		} else {
-			return fmt.Errorf("internal error: cannot find slot %s for device %s", slot.Name, deviceKey)
+			return fmt.Errorf("internal error: cannot find slot %s for device %s", slot.Name, hotplugKey)
 		}
 	}
 

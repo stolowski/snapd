@@ -115,24 +115,6 @@ func (r *Repository) AllHotplugInterfaces() []Interface {
 	return ifaces
 }
 
-// SlotForDeviceKey returns all hotplug slots for given device key and interface name.
-func (r *Repository) SlotForDeviceKey(deviceKey, ifaceName string) (*snap.SlotInfo, error) {
-	r.m.Lock()
-	defer r.m.Unlock()
-
-	snapName, err := r.GuessSystemSnapName()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, slotInfo := range r.slots[snapName] {
-		if slotInfo.HotplugDeviceKey == deviceKey && slotInfo.Interface == ifaceName {
-			return slotInfo, nil
-		}
-	}
-	return nil, nil
-}
-
 // InfoOptions describes options for Info.
 //
 // Names: return just this subset if non-empty.
@@ -557,7 +539,7 @@ func (r *Repository) ResolveDisconnect(plugSnapName, plugName, slotSnapName, slo
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	coreSnapName, _ := r.GuessSystemSnapName()
+	coreSnapName, _ := r.guessSystemSnapName()
 	if coreSnapName == "" {
 		// This is not strictly speaking true BUT when there's no core snap the
 		// produced error messages are consistent to when the is a core snap
@@ -750,7 +732,7 @@ func (r *Repository) Connected(snapName, plugOrSlotName string) ([]*ConnRef, err
 
 func (r *Repository) connected(snapName, plugOrSlotName string) ([]*ConnRef, error) {
 	if snapName == "" {
-		snapName, _ = r.GuessSystemSnapName()
+		snapName, _ = r.guessSystemSnapName()
 		if snapName == "" {
 			return nil, fmt.Errorf("internal error: cannot obtain core snap name while computing connections")
 		}
@@ -782,19 +764,18 @@ func (r *Repository) connected(snapName, plugOrSlotName string) ([]*ConnRef, err
 	return conns, nil
 }
 
-// ConnectionsForDeviceKey returns all hotplug connections for given device key and interface name.
-func (r *Repository) ConnectionsForDeviceKey(deviceKey, ifaceName string) ([]*ConnRef, error) {
+// ConnectionsForHotplugKey returns all hotplug connections for given interface name and hotplug key.
+func (r *Repository) ConnectionsForHotplugKey(ifaceName, hotplugKey string) ([]*ConnRef, error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	// FIXME: agreement needed how to find about system snap and where to attach interfaces.
-	snapName, err := r.GuessSystemSnapName()
+	snapName, err := r.guessSystemSnapName()
 	if err != nil {
 		return nil, err
 	}
 	var conns []*ConnRef
 	for _, slotInfo := range r.slots[snapName] {
-		if slotInfo.HotplugDeviceKey == deviceKey && slotInfo.Interface == ifaceName {
+		if slotInfo.Interface == ifaceName && slotInfo.HotplugKey == hotplugKey {
 			for plugInfo := range r.slotPlugs[slotInfo] {
 				connRef := NewConnRef(plugInfo, slotInfo)
 				conns = append(conns, connRef)
@@ -805,23 +786,23 @@ func (r *Repository) ConnectionsForDeviceKey(deviceKey, ifaceName string) ([]*Co
 	return conns, nil
 }
 
-// HasHotplugSlot returns true if there is a hotplug-created slot for given deviceKey and interface name
-// (regardless od whether it has connections or not).
-func (r *Repository) HasHotplugSlot(deviceKey, ifaceName string) (bool, error) {
+// SlotForHotplugKey returns a hotplug slot for given interface name and hotplug key or nil
+// if there is no slot.
+func (r *Repository) SlotForHotplugKey(ifaceName, hotplugKey string) (*snap.SlotInfo, error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	// FIXME: agreement needed how to find about system snap and where to attach interfaces.
-	snapName, err := r.GuessSystemSnapName()
+	snapName, err := r.guessSystemSnapName()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
+
 	for _, slotInfo := range r.slots[snapName] {
-		if slotInfo.HotplugDeviceKey == deviceKey && slotInfo.Interface == ifaceName {
-			return true, nil
+		if slotInfo.Interface == ifaceName && slotInfo.HotplugKey == hotplugKey {
+			return slotInfo, nil
 		}
 	}
-	return false, nil
+	return nil, nil
 }
 
 func (r *Repository) Connections(snapName string) ([]*ConnRef, error) {
@@ -829,7 +810,7 @@ func (r *Repository) Connections(snapName string) ([]*ConnRef, error) {
 	defer r.m.Unlock()
 
 	if snapName == "" {
-		snapName, _ = r.GuessSystemSnapName()
+		snapName, _ = r.guessSystemSnapName()
 		if snapName == "" {
 			return nil, fmt.Errorf("internal error: cannot obtain core snap name while computing connections")
 		}
@@ -856,8 +837,8 @@ func (r *Repository) Connections(snapName string) ([]*ConnRef, error) {
 	return conns, nil
 }
 
-// GuessSystemSnapName returns the name of the core snap if one exists
-func (r *Repository) GuessSystemSnapName() (string, error) {
+// guessSystemSnapName returns the name of the core snap if one exists
+func (r *Repository) guessSystemSnapName() (string, error) {
 	switch {
 	case r.slots["snapd"] != nil:
 		return "snapd", nil

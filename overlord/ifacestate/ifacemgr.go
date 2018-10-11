@@ -31,7 +31,7 @@ import (
 	"github.com/snapcore/snapd/overlord/state"
 )
 
-type deviceData struct{ ifaceName, deviceKey string }
+type deviceData struct{ ifaceName, hotplugKey string }
 
 // InterfaceManager is responsible for the maintenance of interfaces in
 // the system state.  It maintains interface connections, and also observes
@@ -204,8 +204,8 @@ func MockSecurityBackends(be []interfaces.SecurityBackend) func() {
 
 // MockObservedDevicePath adds the given device to the map of observed devices.
 // This function is used for tests only.
-func (m *InterfaceManager) MockObservedDevicePath(devPath, deviceKey, ifaceName string) func() {
+func (m *InterfaceManager) MockObservedDevicePath(devPath, ifaceName, hotplugKey string) func() {
 	old := m.hotplugDevicePaths
-	m.hotplugDevicePaths[devPath] = append(m.hotplugDevicePaths[devPath], deviceData{deviceKey: deviceKey, ifaceName: ifaceName})
+	m.hotplugDevicePaths[devPath] = append(m.hotplugDevicePaths[devPath], deviceData{hotplugKey: hotplugKey, ifaceName: ifaceName})
 	return func() { m.hotplugDevicePaths = old }
 }
