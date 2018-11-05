@@ -20,6 +20,7 @@
 package builtin
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/snapcore/snapd/interfaces"
@@ -69,7 +70,7 @@ const cameraConnectedPlugAppArmorHotplug = `
 /sys/class/video4linux/ r,
 `
 
-var cameraConnectedPlugUDev = []string{`KERNEL=="video[0-9]*"`}
+var cameraConnectedPlugUDev = []string{`KERNEL=="###KERNEL###"`}
 
 // Name of the serial-port interface.
 func (iface *cameraInterface) Name() string {
@@ -95,6 +96,7 @@ func (iface *cameraInterface) BeforePrepareSlot(slot *snap.SlotInfo) error {
 
 func (iface *cameraInterface) AppArmorConnectedPlug(spec *apparmor.Specification, plug *interfaces.ConnectedPlug, slot *interfaces.ConnectedSlot) error {
 	var path, devpath, minor string
+	// if path/devpath/minor attributes are set by hotplug, then use very precise rules
 	if slot.Attr("path", &path) == nil && slot.Attr("devpath", &devpath) == nil && slot.Attr("minor", &minor) == nil {
 		snippet := strings.Replace(cameraConnectedPlugAppArmorHotplug, "###PATH###", path, -1)
 		snippet = strings.Replace(snippet, "###DEVPATH###", devpath, -1)
@@ -107,8 +109,17 @@ func (iface *cameraInterface) AppArmorConnectedPlug(spec *apparmor.Specification
 }
 
 func (iface *cameraInterface) UDevConnectedPlug(spec *udev.Specification, plug *interfaces.ConnectedPlug, slot *interfaces.ConnectedSlot) error {
+	kernel := "video[0-9]*"
+	var path string
+	// if path attribute is set by hotplug, then tag specific device
+	if slot.Attr("path", &path) == nil {
+		if dir, file := filepath.Split(path); dir == "/dev/" {
+			kernel = file
+		}
+	}
 	for _, rule := range cameraConnectedPlugUDev {
-		spec.TagDevice(rule)
+		snippet := strings.Replace(rule, "###KERNEL###", kernel, -1)
+		spec.TagDevice(snippet)
 	}
 	return nil
 }
