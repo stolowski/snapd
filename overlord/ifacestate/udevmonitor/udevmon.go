@@ -97,6 +97,7 @@ func (m *Monitor) Connect() error {
 		Rules: []netlink.RuleDefinition{
 			{Env: map[string]string{"SUBSYSTEM": "tty"}},
 			{Env: map[string]string{"SUBSYSTEM": "net"}},
+			{Env: map[string]string{"SUBSYSTEM": "video4linux"}},
 			{Env: map[string]string{"SUBSYSTEM": "usb"}}}}
 
 	m.monitorStop = m.netlinkConn.Monitor(m.netlinkEvents, m.netlinkErrors, filter)
