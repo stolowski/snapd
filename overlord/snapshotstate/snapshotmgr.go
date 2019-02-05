@@ -68,6 +68,10 @@ func Manager(st *state.State, runner *state.TaskRunner) *SnapshotManager {
 // Ensure is part of the overlord.StateManager interface.
 func (SnapshotManager) Ensure() error { return nil }
 
+func (m *SnapshotManager) Kind() string {
+	return "snapshot"
+}
+
 func (SnapshotManager) affectedSnaps(t *state.Task) ([]string, error) {
 	if k := t.Kind(); k == "check-snapshot" || k == "forget-snapshot" {
 		// check and forget don't affect snaps

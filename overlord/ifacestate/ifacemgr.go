@@ -135,6 +135,10 @@ func (m *InterfaceManager) Ensure() error {
 	return nil
 }
 
+func (m *InterfaceManager) Kind() string {
+	return "iface"
+}
+
 // Stop implements StateWaiterStopper.Stop. It stops
 // the udev monitor, if running.
 func (m *InterfaceManager) Stop() {

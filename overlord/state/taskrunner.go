@@ -185,6 +185,12 @@ func (r *TaskRunner) run(t *Task) {
 	tomb := &tomb.Tomb{}
 	r.tombs[t.ID()] = tomb
 	tomb.Go(func() error {
+		perfStart := time.Now()
+		logger.Noticef("PERF: start task %v %q", t.ID(), t.Summary())
+		defer func() {
+			perfEnd := time.Now()
+			logger.Noticef("PERF: end task %v took %v", t.ID(), perfEnd.Sub(perfStart))
+		}()
 		// Capture the error result with tomb.Kill so we can
 		// use tomb.Err uniformily to consider both it or a
 		// overriding previous Kill reason.
@@ -429,6 +435,10 @@ ConsiderTasks:
 	}
 
 	return nil
+}
+
+func (m *TaskRunner) Kind() string {
+	return "task"
 }
 
 // mustWait returns whether task t must wait for other tasks to be done.

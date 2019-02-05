@@ -147,6 +147,10 @@ func (m *HookManager) Ensure() error {
 	return nil
 }
 
+func (m *HookManager) Kind() string {
+	return "hook"
+}
+
 // StopHooks kills all currently running hooks and returns after
 // that's done.
 func (m *HookManager) StopHooks() {

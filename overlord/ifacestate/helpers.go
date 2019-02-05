@@ -26,6 +26,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/snapcore/snapd/asserts"
 	"github.com/snapcore/snapd/dirs"
@@ -336,7 +337,11 @@ func (m *InterfaceManager) setupSecurityByBackend(task *state.Task, snaps []*sna
 	for _, backend := range m.repo.Backends() {
 		for i, snapInfo := range snaps {
 			st.Unlock()
+			perfStart := time.Now()
+			logger.Noticef("PERF: start sub-task %v backend %q", task.ID(), backend.Name())
 			err := backend.Setup(snapInfo, opts[i], m.repo)
+			perfEnd := time.Now()
+			logger.Noticef("PERF: end sub-task %v took %v", task.ID(), perfEnd.Sub(perfStart))
 			st.Lock()
 			if err != nil {
 				task.Errorf("cannot setup %s for snap %q: %s", backend.Name(), snapInfo.InstanceName(), err)
@@ -354,7 +359,11 @@ func (m *InterfaceManager) setupSnapSecurity(task *state.Task, snapInfo *snap.In
 
 	for _, backend := range m.repo.Backends() {
 		st.Unlock()
+		perfStart := time.Now()
+		logger.Noticef("PERF: start sub-task %v backend %q", task.ID(), backend.Name())
 		err := backend.Setup(snapInfo, opts, m.repo)
+		perfEnd := time.Now()
+		logger.Noticef("PERF: end sub-task %v took %v", task.ID(), perfEnd.Sub(perfStart))
 		st.Lock()
 		if err != nil {
 			task.Errorf("cannot setup %s for snap %q: %s", backend.Name(), instanceName, err)
@@ -368,7 +377,11 @@ func (m *InterfaceManager) removeSnapSecurity(task *state.Task, instanceName str
 	st := task.State()
 	for _, backend := range m.repo.Backends() {
 		st.Unlock()
+		perfStart := time.Now()
+		logger.Noticef("PERF: start sub-task %v backend %q", task.ID(), backend.Name())
 		err := backend.Remove(instanceName)
+		perfEnd := time.Now()
+		logger.Noticef("PERF: end sub-task %v took %v", task.ID(), perfEnd.Sub(perfStart))
 		st.Lock()
 		if err != nil {
 			task.Errorf("cannot setup %s for snap %q: %s", backend.Name(), instanceName, err)

@@ -377,6 +377,7 @@ func (d *Daemon) Init() error {
 	d.addRoutes()
 
 	logger.Noticef("started %v.", httputil.UserAgent())
+	logger.Noticef("custom build")
 
 	return nil
 }

@@ -22,6 +22,7 @@ package overlord
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/snapcore/snapd/logger"
 
@@ -34,6 +35,7 @@ type StateManager interface {
 	// Ensure forces a complete evaluation of the current state.
 	// See StateEngine.Ensure for more details.
 	Ensure() error
+	Kind() string
 }
 
 // StateWaiterStopper is implemented by StateManagers that have
@@ -97,7 +99,12 @@ func (se *StateEngine) Ensure() error {
 	}
 	var errs []error
 	for _, m := range se.managers {
+		perfStart := time.Now()
+		logger.Noticef("PERF: start ensure %q", m.Kind())
 		err := m.Ensure()
+		perfEnd := time.Now()
+		logger.Noticef("PERF: end ensure %q took %v", m.Kind(), perfEnd.Sub(perfStart))
+
 		if err != nil {
 			logger.Noticef("state ensure error: %v", err)
 			errs = append(errs, err)

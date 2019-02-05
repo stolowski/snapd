@@ -484,6 +484,10 @@ func (m *DeviceManager) Ensure() error {
 	return nil
 }
 
+func (m *DeviceManager) Kind() string {
+	return "device"
+}
+
 func (m *DeviceManager) keyPair() (asserts.PrivateKey, error) {
 	device, err := auth.Device(m.state)
 	if err != nil {

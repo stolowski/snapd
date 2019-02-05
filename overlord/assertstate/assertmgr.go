@@ -60,6 +60,10 @@ func (m *AssertManager) Ensure() error {
 	return nil
 }
 
+func (m *AssertManager) Kind() string {
+	return "assert"
+}
+
 type cachedDBKey struct{}
 
 // ReplaceDB replaces the assertion database used by the manager.

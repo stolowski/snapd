@@ -659,3 +659,7 @@ func (m *SnapManager) Ensure() error {
 
 	return nil
 }
+
+func (m *SnapManager) Kind() string {
+	return "snap"
+}

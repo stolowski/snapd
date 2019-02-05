@@ -43,6 +43,10 @@ func (m *CommandManager) Ensure() error {
 	return nil
 }
 
+func (m *CommandManager) Kind() string {
+	return "command"
+}
+
 var defaultExecTimeout = 5 * time.Second
 
 func doExec(t *state.Task, tomb *tomb.Tomb) error {
