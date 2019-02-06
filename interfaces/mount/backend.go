@@ -31,6 +31,7 @@ package mount
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 
@@ -54,7 +55,7 @@ func (b *Backend) Name() interfaces.SecuritySystem {
 }
 
 // Setup creates mount mount profile files specific to a given snap.
-func (b *Backend) Setup(snapInfo *snap.Info, confinement interfaces.ConfinementOptions, repo *interfaces.Repository) error {
+func (b *Backend) Setup(_ context.Context, snapInfo *snap.Info, confinement interfaces.ConfinementOptions, repo *interfaces.Repository) error {
 	// Record all changes to the mount system for this snap.
 	snapName := snapInfo.InstanceName()
 	spec, err := repo.SnapSpecification(b.Name(), snapName)

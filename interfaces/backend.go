@@ -20,6 +20,8 @@
 package interfaces
 
 import (
+	"context"
+
 	"github.com/snapcore/snapd/snap"
 )
 
@@ -82,7 +84,7 @@ type SecurityBackend interface {
 	//
 	// This method should be called after changing plug, slots, connections
 	// between them or application present in the snap.
-	Setup(snapInfo *snap.Info, opts ConfinementOptions, repo *Repository) error
+	Setup(ctx context.Context, snapInfo *snap.Info, opts ConfinementOptions, repo *Repository) error
 
 	// Remove removes and unloads security artefacts of a given snap.
 	//

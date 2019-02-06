@@ -34,6 +34,7 @@ package seccomp
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -45,6 +46,7 @@ import (
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/logger"
 	"github.com/snapcore/snapd/osutil"
+	"github.com/snapcore/snapd/perf"
 	"github.com/snapcore/snapd/release"
 	"github.com/snapcore/snapd/snap"
 	"github.com/snapcore/snapd/strutil"
@@ -98,7 +100,7 @@ func (b *Backend) Name() interfaces.SecuritySystem {
 //
 // This method should be called after changing plug, slots, connections between
 // them or application present in the snap.
-func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
+func (b *Backend) Setup(ctx context.Context, snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
 	snapName := snapInfo.InstanceName()
 	// Get the snippets that apply to this snap
 	spec, err := repo.SnapSpecification(b.Name(), snapName)
@@ -128,7 +130,12 @@ func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions,
 
 		seccompToBpf := seccompToBpfPath()
 		cmd := exec.Command(seccompToBpf, "compile", in, out)
-		if output, err := cmd.CombinedOutput(); err != nil {
+		var output []byte
+		sample := perf.TimedRun(fmt.Sprintf("seccomp BPF compile %s", baseName), func(_ *perf.TrivialSample) {
+			output, err = cmd.CombinedOutput()
+		})
+		perf.SampleFromContext(ctx).Append(sample)
+		if err != nil {
 			return osutil.OutputErr(output, err)
 		}
 	}

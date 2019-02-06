@@ -21,6 +21,7 @@
 package perf
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 )
@@ -84,4 +85,46 @@ func GetRingBuffer() *RingBuffer {
 
 func makeRingBuffer() *RingBuffer {
 	return NewRingBuffer(1024)
+}
+
+func TimedRun(summary string, fn func(*TrivialSample)) *TrivialSample {
+	sample := &TrivialSample{
+		Summary: summary,
+	}
+	start := time.Now()
+	fn(sample)
+	end := time.Now()
+	sample.Duration = end.Sub(start)
+	return sample
+}
+
+func LeafTimedRun(summary string, fn func()) *TrivialSample {
+	sample := &TrivialSample{
+		Summary: summary,
+	}
+	start := time.Now()
+	fn()
+	end := time.Now()
+	sample.Duration = end.Sub(start)
+	return sample
+}
+
+type perfContextKeyType int
+
+const perfSamplesKey perfContextKeyType = 1
+
+func SampleFromContext(ctx context.Context) *TrivialSample {
+	val := ctx.Value(perfSamplesKey)
+	if val == nil {
+		return &TrivialSample{}
+	}
+	sample, ok := val.(*TrivialSample)
+	if !ok {
+		return &TrivialSample{}
+	}
+	return sample
+}
+
+func SampleWithContext(ctx context.Context, sample *TrivialSample) context.Context {
+	return context.WithValue(ctx, perfSamplesKey, sample)
 }

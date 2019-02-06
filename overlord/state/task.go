@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/snapcore/snapd/logger"
+	"github.com/snapcore/snapd/perf"
 	"time"
 )
 
@@ -57,6 +58,8 @@ type Task struct {
 	activeTime time.Duration
 
 	atTime time.Time
+
+	performanceSamples []*perf.TrivialSample
 }
 
 func newTask(state *State, id, kind, summary string) *Task {
@@ -90,6 +93,8 @@ type marshalledTask struct {
 	ActiveTime time.Duration `json:"active-time,omitempty"`
 
 	AtTime *time.Time `json:"at-time,omitempty"`
+
+	PerformanceSamples []*perf.TrivialSample `json:"performance-samples,omitempty"`
 }
 
 // MarshalJSON makes Task a json.Marshaller
@@ -122,6 +127,8 @@ func (t *Task) MarshalJSON() ([]byte, error) {
 		ActiveTime: t.activeTime,
 
 		AtTime: atTime,
+
+		PerformanceSamples: t.performanceSamples,
 	})
 }
 
@@ -279,6 +286,17 @@ func (t *Task) ReadyTime() time.Time {
 func (t *Task) AtTime() time.Time {
 	t.state.reading()
 	return t.atTime
+}
+
+func (t *Task) PerformanceSamples() []*perf.TrivialSample {
+	t.state.reading()
+	// TODO: this should potentially return a copy
+	return t.performanceSamples
+}
+
+func (t *Task) AddPerformanceSamples(samples []*perf.TrivialSample) {
+	t.state.writing()
+	t.performanceSamples = append(t.performanceSamples, samples...)
 }
 
 func (t *Task) AccumulateActiveTime(duration time.Duration) {

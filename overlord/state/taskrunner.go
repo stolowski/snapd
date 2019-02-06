@@ -20,12 +20,15 @@
 package state
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"gopkg.in/tomb.v2"
 
 	"github.com/snapcore/snapd/logger"
+	"github.com/snapcore/snapd/perf"
 )
 
 // HandlerFunc is the type of function for the handlers
@@ -182,19 +185,18 @@ func (r *TaskRunner) run(t *Task) {
 	}
 
 	t.At(time.Time{}) // clear schedule
-	tomb := &tomb.Tomb{}
+	sample := &perf.TrivialSample{
+		Summary: fmt.Sprintf("task %v run", t.ID()),
+	}
+	tomb, _ := tomb.WithContext(perf.SampleWithContext(context.Background(), sample))
 	r.tombs[t.ID()] = tomb
 	tomb.Go(func() error {
-		perfStart := time.Now()
-		logger.Noticef("PERF: start task %v %q", t.ID(), t.Summary())
-		defer func() {
-			perfEnd := time.Now()
-			logger.Noticef("PERF: end task %v took %v", t.ID(), perfEnd.Sub(perfStart))
-		}()
 		// Capture the error result with tomb.Kill so we can
 		// use tomb.Err uniformily to consider both it or a
 		// overriding previous Kill reason.
+		perfStart := time.Now()
 		tomb.Kill(handler(t, tomb))
+		perfEnd := time.Now()
 
 		// Locks must be acquired in the same order everywhere.
 		r.mu.Lock()
@@ -202,6 +204,9 @@ func (r *TaskRunner) run(t *Task) {
 		r.state.Lock()
 		defer r.state.Unlock()
 
+		t.AccumulateActiveTime(perfEnd.Sub(perfStart))
+		sample.Duration = perfEnd.Sub(perfStart)
+		t.AddPerformanceSamples(sample.Samples)
 		delete(r.tombs, t.ID())
 
 		// some tasks were blocked, now there's chance the

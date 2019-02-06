@@ -20,6 +20,7 @@
 package ifacestate
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -33,6 +34,7 @@ import (
 	"github.com/snapcore/snapd/logger"
 	"github.com/snapcore/snapd/overlord/snapstate"
 	"github.com/snapcore/snapd/overlord/state"
+	"github.com/snapcore/snapd/perf"
 	"github.com/snapcore/snapd/snap"
 )
 
@@ -45,7 +47,7 @@ func confinementOptions(flags snapstate.Flags) interfaces.ConfinementOptions {
 	}
 }
 
-func (m *InterfaceManager) setupAffectedSnaps(task *state.Task, affectingSnap string, affectedSnaps []string) error {
+func (m *InterfaceManager) setupAffectedSnaps(ctx context.Context, task *state.Task, affectingSnap string, affectedSnaps []string) error {
 	st := task.State()
 
 	// Setup security of the affected snaps.
@@ -67,7 +69,7 @@ func (m *InterfaceManager) setupAffectedSnaps(task *state.Task, affectingSnap st
 			return err
 		}
 		opts := confinementOptions(snapst.Flags)
-		if err := m.setupSnapSecurity(task, affectedSnapInfo, opts); err != nil {
+		if err := m.setupSnapSecurity(ctx, task, affectedSnapInfo, opts); err != nil {
 			return err
 		}
 	}
@@ -106,7 +108,7 @@ func (m *InterfaceManager) doSetupProfiles(task *state.Task, tomb *tomb.Tomb) er
 	return m.setupProfilesForSnap(task, tomb, snapInfo, opts)
 }
 
-func (m *InterfaceManager) setupProfilesForSnap(task *state.Task, _ *tomb.Tomb, snapInfo *snap.Info, opts interfaces.ConfinementOptions) error {
+func (m *InterfaceManager) setupProfilesForSnap(task *state.Task, tmb *tomb.Tomb, snapInfo *snap.Info, opts interfaces.ConfinementOptions) error {
 	st := task.State()
 
 	if err := addImplicitSlots(task.State(), snapInfo); err != nil {
@@ -195,7 +197,8 @@ func (m *InterfaceManager) setupProfilesForSnap(task *state.Task, _ *tomb.Tomb, 
 		affectedSnaps = append(affectedSnaps, snapInfo)
 		confinementOpts = append(confinementOpts, confinementOptions(snapst.Flags))
 	}
-	return m.setupSecurityByBackend(task, affectedSnaps, confinementOpts)
+
+	return m.setupSecurityByBackend(tmb.Context(nil), task, affectedSnaps, confinementOpts)
 }
 
 func (m *InterfaceManager) doRemoveProfiles(task *state.Task, tomb *tomb.Tomb) error {
@@ -213,7 +216,7 @@ func (m *InterfaceManager) doRemoveProfiles(task *state.Task, tomb *tomb.Tomb) e
 	return m.removeProfilesForSnap(task, tomb, snapName)
 }
 
-func (m *InterfaceManager) removeProfilesForSnap(task *state.Task, _ *tomb.Tomb, snapName string) error {
+func (m *InterfaceManager) removeProfilesForSnap(task *state.Task, tmb *tomb.Tomb, snapName string) error {
 	// Disconnect the snap entirely.
 	// This is required to remove the snap from the interface repository.
 	// The returned list of affected snaps will need to have its security setup
@@ -222,7 +225,7 @@ func (m *InterfaceManager) removeProfilesForSnap(task *state.Task, _ *tomb.Tomb,
 	if err != nil {
 		return err
 	}
-	if err := m.setupAffectedSnaps(task, snapName, affectedSnaps); err != nil {
+	if err := m.setupAffectedSnaps(tmb.Context(nil), task, snapName, affectedSnaps); err != nil {
 		return err
 	}
 
@@ -233,7 +236,7 @@ func (m *InterfaceManager) removeProfilesForSnap(task *state.Task, _ *tomb.Tomb,
 	}
 
 	// Remove security artefacts of the snap.
-	if err := m.removeSnapSecurity(task, snapName); err != nil {
+	if err := m.removeSnapSecurity(tmb.Context(nil), task, snapName); err != nil {
 		return err
 	}
 
@@ -369,7 +372,7 @@ func setDynamicHookAttributes(task *state.Task, plugAttrs, slotAttrs map[string]
 	task.Set("slot-dynamic", slotAttrs)
 }
 
-func (m *InterfaceManager) doConnect(task *state.Task, _ *tomb.Tomb) error {
+func (m *InterfaceManager) doConnect(task *state.Task, tomb *tomb.Tomb) error {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
@@ -456,14 +459,24 @@ func (m *InterfaceManager) doConnect(task *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
+	ctx := tomb.Context(nil)
+	parentSample := perf.SampleFromContext(ctx)
 	slotOpts := confinementOptions(slotSnapst.Flags)
-	if err := m.setupSnapSecurity(task, slot.Snap, slotOpts); err != nil {
+	sample := perf.TimedRun("setup slot security", func(sample *perf.TrivialSample) {
+		err = m.setupSnapSecurity(perf.SampleWithContext(ctx, sample), task, slot.Snap, slotOpts)
+	})
+	parentSample.Append(sample)
+	if err != nil {
 		return err
 	}
 	plugOpts := confinementOptions(plugSnapst.Flags)
-	if err := m.setupSnapSecurity(task, plug.Snap, plugOpts); err != nil {
+	sample = perf.TimedRun("setup plug security", func(sample *perf.TrivialSample) {
+		m.setupSnapSecurity(perf.SampleWithContext(ctx, sample), task, plug.Snap, plugOpts)
+	})
+	if err != nil {
 		return err
 	}
+	parentSample.Append(sample)
 
 	conns[connRef.ID()] = &connState{
 		Interface:        conn.Interface(),
@@ -483,7 +496,7 @@ func (m *InterfaceManager) doConnect(task *state.Task, _ *tomb.Tomb) error {
 	return nil
 }
 
-func (m *InterfaceManager) doDisconnect(task *state.Task, _ *tomb.Tomb) error {
+func (m *InterfaceManager) doDisconnect(task *state.Task, tomb *tomb.Tomb) error {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
@@ -522,7 +535,7 @@ func (m *InterfaceManager) doDisconnect(task *state.Task, _ *tomb.Tomb) error {
 			return err
 		}
 		opts := confinementOptions(snapst.Flags)
-		if err := m.setupSnapSecurity(task, snapInfo, opts); err != nil {
+		if err := m.setupSnapSecurity(tomb.Context(nil), task, snapInfo, opts); err != nil {
 			return err
 		}
 	}
@@ -569,7 +582,7 @@ func (m *InterfaceManager) doDisconnect(task *state.Task, _ *tomb.Tomb) error {
 	return nil
 }
 
-func (m *InterfaceManager) undoDisconnect(task *state.Task, _ *tomb.Tomb) error {
+func (m *InterfaceManager) undoDisconnect(task *state.Task, tomb *tomb.Tomb) error {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
@@ -619,11 +632,11 @@ func (m *InterfaceManager) undoDisconnect(task *state.Task, _ *tomb.Tomb) error 
 	}
 
 	slotOpts := confinementOptions(slotSnapst.Flags)
-	if err := m.setupSnapSecurity(task, slot.Snap, slotOpts); err != nil {
+	if err := m.setupSnapSecurity(tomb.Context(nil), task, slot.Snap, slotOpts); err != nil {
 		return err
 	}
 	plugOpts := confinementOptions(plugSnapst.Flags)
-	if err := m.setupSnapSecurity(task, plug.Snap, plugOpts); err != nil {
+	if err := m.setupSnapSecurity(tomb.Context(nil), task, plug.Snap, plugOpts); err != nil {
 		return err
 	}
 

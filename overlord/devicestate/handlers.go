@@ -20,6 +20,7 @@ package devicestate
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,6 +43,7 @@ import (
 	"github.com/snapcore/snapd/overlord/configstate/proxyconf"
 	"github.com/snapcore/snapd/overlord/snapstate"
 	"github.com/snapcore/snapd/overlord/state"
+	"github.com/snapcore/snapd/perf"
 )
 
 func (m *DeviceManager) doMarkSeeded(t *state.Task, _ *tomb.Tomb) error {
@@ -144,7 +146,7 @@ func (cfg *serialRequestConfig) setURLs(proxyURL, svcURL *url.URL) {
 	}
 }
 
-func (m *DeviceManager) doGenerateDeviceKey(t *state.Task, _ *tomb.Tomb) error {
+func (m *DeviceManager) doGenerateDeviceKey(t *state.Task, tmb *tomb.Tomb) error {
 	st := t.State()
 	st.Lock()
 	defer st.Unlock()
@@ -159,14 +161,23 @@ func (m *DeviceManager) doGenerateDeviceKey(t *state.Task, _ *tomb.Tomb) error {
 		return nil
 	}
 
+	parentSample := perf.SampleFromContext(tmb.Context(nil))
 	st.Unlock()
-	keyPair, err := generateRSAKey(keyLength)
+	var keyPair *rsa.PrivateKey
+	sample := perf.TimedRun("generate key", func(_ *perf.TrivialSample) {
+		keyPair, err = generateRSAKey(keyLength)
+	})
 	st.Lock()
+	parentSample.Append(sample)
 	if err != nil {
 		return fmt.Errorf("cannot generate device key pair: %v", err)
 	}
 
-	privKey := asserts.RSAPrivateKey(keyPair)
+	var privKey asserts.PrivateKey
+	sample = perf.TimedRun("generate asserts private key", func(_ *perf.TrivialSample) {
+		privKey = asserts.RSAPrivateKey(keyPair)
+	})
+	parentSample.Append(sample)
 	err = m.keypairMgr.Put(privKey)
 	if err != nil {
 		return fmt.Errorf("cannot store device key pair: %v", err)

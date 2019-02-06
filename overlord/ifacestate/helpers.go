@@ -21,12 +21,12 @@ package ifacestate
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/snapcore/snapd/asserts"
 	"github.com/snapcore/snapd/dirs"
@@ -41,6 +41,7 @@ import (
 	"github.com/snapcore/snapd/overlord/devicestate"
 	"github.com/snapcore/snapd/overlord/snapstate"
 	"github.com/snapcore/snapd/overlord/state"
+	"github.com/snapcore/snapd/perf"
 	"github.com/snapcore/snapd/snap"
 )
 
@@ -78,7 +79,7 @@ func (m *InterfaceManager) initialize(extraInterfaces []interfaces.Interface, ex
 		return err
 	}
 	if profilesNeedRegeneration() {
-		if err := m.regenerateAllSecurityProfiles(); err != nil {
+		if err := m.regenerateAllSecurityProfiles(context.Background()); err != nil {
 			return err
 		}
 	}
@@ -153,7 +154,7 @@ var profilesNeedRegeneration = profilesNeedRegenerationImpl
 var writeSystemKey = interfaces.WriteSystemKey
 
 // regenerateAllSecurityProfiles will regenerate all security profiles.
-func (m *InterfaceManager) regenerateAllSecurityProfiles() error {
+func (m *InterfaceManager) regenerateAllSecurityProfiles(ctx context.Context) error {
 	// Get all the security backends
 	securityBackends := m.repo.Backends()
 
@@ -198,7 +199,13 @@ func (m *InterfaceManager) regenerateAllSecurityProfiles() error {
 				continue // Test backends have no name, skip them to simplify testing.
 			}
 			// Refresh security of this snap and backend
-			if err := backend.Setup(snapInfo, opts, m.repo); err != nil {
+			var err error
+			sample := perf.TimedRun(fmt.Sprintf("regenerate %s profile for %s", backend.Name(), snapInfo.InstanceName()),
+				func(nested *perf.TrivialSample) {
+					err = backend.Setup(perf.SampleWithContext(ctx, nested), snapInfo, opts, m.repo)
+				})
+			perf.SampleFromContext(ctx).Append(sample)
+			if err != nil {
 				// Let's log this but carry on without writing the system key.
 				logger.Noticef("cannot regenerate %s profile for snap %q: %s",
 					backend.Name(), snapName, err)
@@ -329,7 +336,7 @@ func (m *InterfaceManager) reloadConnections(snapName string) ([]string, error) 
 	return result, nil
 }
 
-func (m *InterfaceManager) setupSecurityByBackend(task *state.Task, snaps []*snap.Info, opts []interfaces.ConfinementOptions) error {
+func (m *InterfaceManager) setupSecurityByBackend(ctx context.Context, task *state.Task, snaps []*snap.Info, opts []interfaces.ConfinementOptions) error {
 	st := task.State()
 
 	// Setup all affected snaps, start with the most important security
@@ -337,12 +344,13 @@ func (m *InterfaceManager) setupSecurityByBackend(task *state.Task, snaps []*sna
 	for _, backend := range m.repo.Backends() {
 		for i, snapInfo := range snaps {
 			st.Unlock()
-			perfStart := time.Now()
-			logger.Noticef("PERF: start sub-task %v backend %q", task.ID(), backend.Name())
-			err := backend.Setup(snapInfo, opts[i], m.repo)
-			perfEnd := time.Now()
-			logger.Noticef("PERF: end sub-task %v took %v", task.ID(), perfEnd.Sub(perfStart))
+			var err error
+			sample := perf.TimedRun(fmt.Sprintf("setup security by backend %s snap %s", backend.Name(), snapInfo.InstanceName()),
+				func(nested *perf.TrivialSample) {
+					err = backend.Setup(perf.SampleWithContext(ctx, nested), snapInfo, opts[i], m.repo)
+				})
 			st.Lock()
+			perf.SampleFromContext(ctx).Append(sample)
 			if err != nil {
 				task.Errorf("cannot setup %s for snap %q: %s", backend.Name(), snapInfo.InstanceName(), err)
 				return err
@@ -353,18 +361,18 @@ func (m *InterfaceManager) setupSecurityByBackend(task *state.Task, snaps []*sna
 	return nil
 }
 
-func (m *InterfaceManager) setupSnapSecurity(task *state.Task, snapInfo *snap.Info, opts interfaces.ConfinementOptions) error {
+func (m *InterfaceManager) setupSnapSecurity(ctx context.Context, task *state.Task, snapInfo *snap.Info, opts interfaces.ConfinementOptions) error {
 	st := task.State()
 	instanceName := snapInfo.InstanceName()
 
 	for _, backend := range m.repo.Backends() {
 		st.Unlock()
-		perfStart := time.Now()
-		logger.Noticef("PERF: start sub-task %v backend %q", task.ID(), backend.Name())
-		err := backend.Setup(snapInfo, opts, m.repo)
-		perfEnd := time.Now()
-		logger.Noticef("PERF: end sub-task %v took %v", task.ID(), perfEnd.Sub(perfStart))
+		var err error
+		sample := perf.TimedRun(fmt.Sprintf("setup snap security backend %s snap %s", backend.Name(), snapInfo.InstanceName()), func(nested *perf.TrivialSample) {
+			err = backend.Setup(perf.SampleWithContext(ctx, nested), snapInfo, opts, m.repo)
+		})
 		st.Lock()
+		perf.SampleFromContext(ctx).Append(sample)
 		if err != nil {
 			task.Errorf("cannot setup %s for snap %q: %s", backend.Name(), instanceName, err)
 			return err
@@ -373,16 +381,17 @@ func (m *InterfaceManager) setupSnapSecurity(task *state.Task, snapInfo *snap.In
 	return nil
 }
 
-func (m *InterfaceManager) removeSnapSecurity(task *state.Task, instanceName string) error {
+func (m *InterfaceManager) removeSnapSecurity(ctx context.Context, task *state.Task, instanceName string) error {
 	st := task.State()
 	for _, backend := range m.repo.Backends() {
 		st.Unlock()
-		perfStart := time.Now()
-		logger.Noticef("PERF: start sub-task %v backend %q", task.ID(), backend.Name())
-		err := backend.Remove(instanceName)
-		perfEnd := time.Now()
-		logger.Noticef("PERF: end sub-task %v took %v", task.ID(), perfEnd.Sub(perfStart))
+		var err error
+		sample := perf.TimedRun(fmt.Sprintf("remove snap security backend %s snap %s", backend.Name(), instanceName),
+			func(_ *perf.TrivialSample) {
+				err = backend.Remove(instanceName)
+			})
 		st.Lock()
+		perf.SampleFromContext(ctx).Append(sample)
 		if err != nil {
 			task.Errorf("cannot setup %s for snap %q: %s", backend.Name(), instanceName, err)
 			return err

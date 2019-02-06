@@ -20,6 +20,7 @@
 package measure
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -75,4 +76,7 @@ func WriteAll(w io.Writer) {
 		// FIXME: add timestaamps
 		fmt.Fprintln(w, m)
 	}
+}
+
+func FromContext(ctx context.Context) {
 }

@@ -67,3 +67,14 @@ const (
 func (s Sample) Duration() time.Duration {
 	return s.EndTime.Sub(s.StartTime)
 }
+
+type TrivialSample struct {
+	Summary  string           `json:"summary"`
+	Duration time.Duration    `json:"duration"`
+	Samples  []*TrivialSample `json:"samples,omitempty"`
+}
+
+func (t *TrivialSample) Append(sample *TrivialSample) {
+	// TODO locking
+	t.Samples = append(t.Samples, sample)
+}

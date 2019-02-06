@@ -39,6 +39,7 @@ package apparmor
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -51,6 +52,7 @@ import (
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/logger"
 	"github.com/snapcore/snapd/osutil"
+	"github.com/snapcore/snapd/perf"
 	"github.com/snapcore/snapd/release"
 	"github.com/snapcore/snapd/snap"
 	"github.com/snapcore/snapd/strutil"
@@ -291,7 +293,7 @@ func profileGlobs(snapName string) []string {
 //
 // This method should be called after changing plug, slots, connections between
 // them or application present in the snap.
-func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
+func (b *Backend) Setup(ctx context.Context, snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
 	snapName := snapInfo.InstanceName()
 	spec, err := repo.SnapSpecification(b.Name(), snapName)
 	if err != nil {
@@ -369,7 +371,12 @@ func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions,
 	for i, profile := range changed {
 		pathnames[i] = filepath.Join(dir, profile)
 	}
-	errReloadChanged := loadProfiles(pathnames, cache, skipReadCache)
+	var errReloadChanged error
+	sample := perf.LeafTimedRun("reload changed profiles", func() {
+		errReloadChanged = loadProfiles(pathnames, cache, skipReadCache)
+	})
+	perf.SampleFromContext(ctx).Append(sample)
+
 	// Load all unchanged profiles anyway. This ensures those are correct in
 	// the kernel even if the files on disk were not changed. We rely on
 	// apparmor cache to make this performant.
@@ -377,8 +384,19 @@ func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions,
 	for i, profile := range unchanged {
 		pathnames[i] = filepath.Join(dir, profile)
 	}
-	errReloadOther := loadProfiles(pathnames, cache, 0)
-	errUnload := unloadProfiles(removed, cache)
+
+	var errReloadOther error
+	sample = perf.LeafTimedRun("reload other profiles", func() {
+		errReloadOther = loadProfiles(pathnames, cache, 0)
+	})
+	perf.SampleFromContext(ctx).Append(sample)
+
+	var errUnload error
+	sample = perf.LeafTimedRun("unload removed profiles", func() {
+		errUnload = unloadProfiles(removed, cache)
+	})
+	perf.SampleFromContext(ctx).Append(sample)
+
 	if errEnsure != nil {
 		return fmt.Errorf("cannot synchronize security files for snap %q: %s", snapName, errEnsure)
 	}

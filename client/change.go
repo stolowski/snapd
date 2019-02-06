@@ -66,6 +66,14 @@ type Task struct {
 	SpawnTime  time.Time     `json:"spawn-time,omitempty"`
 	ReadyTime  time.Time     `json:"ready-time,omitempty"`
 	ActiveTime time.Duration `json:"active-time,omitempty"`
+
+	PerformanceSamples []*TaskPerformanceSample `json:"performance-samples"`
+}
+
+type TaskPerformanceSample struct {
+	Summary  string                   `json:"summary"`
+	Duration time.Duration            `json:"duration"`
+	Samples  []*TaskPerformanceSample `json:"samples"`
 }
 
 type TaskProgress struct {

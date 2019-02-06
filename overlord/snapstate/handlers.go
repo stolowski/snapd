@@ -499,7 +499,7 @@ func hasOtherInstances(st *state.State, instanceName string) (bool, error) {
 	return false, nil
 }
 
-func (m *SnapManager) doMountSnap(t *state.Task, _ *tomb.Tomb) error {
+func (m *SnapManager) doMountSnap(t *state.Task, tomb *tomb.Tomb) error {
 	st := t.State()
 	st.Lock()
 	snapsup, snapst, err := snapSetupAndState(t)

@@ -26,6 +26,7 @@ package udev
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,6 +35,7 @@ import (
 	"github.com/snapcore/snapd/dirs"
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/osutil"
+	"github.com/snapcore/snapd/perf"
 	"github.com/snapcore/snapd/snap"
 )
 
@@ -56,13 +58,22 @@ func snapRulesFilePath(snapName string) string {
 	return filepath.Join(dirs.SnapUdevRulesDir, rulesFileName)
 }
 
+func TimedReloadRules(ctx context.Context, subsystemTriggers []string) error {
+	var err error
+	sample := perf.LeafTimedRun("reload rules", func() {
+		err = ReloadRules(subsystemTriggers)
+	})
+	perf.SampleFromContext(ctx).Append(sample)
+	return err
+}
+
 // Setup creates udev rules specific to a given snap.
 // If any of the rules are changed or removed then udev database is reloaded.
 //
 // UDev has no concept of a complain mode so confinment options are ignored.
 //
 // If the method fails it should be re-tried (with a sensible strategy) by the caller.
-func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
+func (b *Backend) Setup(ctx context.Context, snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
 	snapName := snapInfo.InstanceName()
 	spec, err := repo.SnapSpecification(b.Name(), snapName)
 	if err != nil {
@@ -88,7 +99,7 @@ func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions,
 			// FIXME: somehow detect the interfaces that were
 			// disconnected and set subsystemTriggers appropriately.
 			// ATM, it is always going to be empty on disconnect.
-			return ReloadRules(subsystemTriggers)
+			return TimedReloadRules(ctx, subsystemTriggers)
 		}
 		return nil
 	}
@@ -125,7 +136,7 @@ func (b *Backend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions,
 	// FIXME: somehow detect the interfaces that were disconnected and set
 	// subsystemTriggers appropriately. ATM, it is always going to be empty
 	// on disconnect.
-	return ReloadRules(subsystemTriggers)
+	return TimedReloadRules(ctx, subsystemTriggers)
 }
 
 // Remove removes udev rules specific to a given snap.
