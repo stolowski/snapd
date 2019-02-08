@@ -20,6 +20,8 @@
 package ifacetest
 
 import (
+	"context"
+
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/snap"
 )
@@ -58,7 +60,7 @@ func (b *TestSecurityBackend) Name() interfaces.SecuritySystem {
 }
 
 // Setup records information about the call and calls the setup callback if one is defined.
-func (b *TestSecurityBackend) Setup(snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
+func (b *TestSecurityBackend) Setup(ctx context.Context, snapInfo *snap.Info, opts interfaces.ConfinementOptions, repo *interfaces.Repository) error {
 	b.SetupCalls = append(b.SetupCalls, TestSetupCall{SnapInfo: snapInfo, Options: opts})
 	if b.SetupCallback == nil {
 		return nil

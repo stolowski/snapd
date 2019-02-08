@@ -245,6 +245,8 @@ func (wm *witnessManager) Ensure() error {
 	return nil
 }
 
+func (wm *witnessManager) Kind() string { return "witness" }
+
 func (s *configcoreHijackSuite) TestHijack(c *C) {
 	configcoreRan := false
 	witnessCfg := false

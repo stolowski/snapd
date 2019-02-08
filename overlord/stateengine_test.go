@@ -50,6 +50,8 @@ func (fm *fakeManager) Ensure() error {
 	return fm.ensureError
 }
 
+func (fm *fakeManager) Kind() string { return "fake" }
+
 func (fm *fakeManager) Stop() {
 	*fm.calls = append(*fm.calls, "stop:"+fm.name)
 }

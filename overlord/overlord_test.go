@@ -223,6 +223,8 @@ func (wm *witnessManager) Ensure() error {
 	return nil
 }
 
+func (wm *witnessManager) Kind() string { return "witness" }
+
 // markSeeded flags the state under the overlord as seeded to avoid running the seeding code in these tests
 func markSeeded(o *overlord.Overlord) {
 	st := o.State()
@@ -602,6 +604,8 @@ func (sm *sampleManager) Ensure() error {
 	}
 	return nil
 }
+
+func (sm *sampleManager) Kind() string { return "sample" }
 
 func (ovs *overlordSuite) TestTrivialSettle(c *C) {
 	restoreIntv := overlord.MockEnsureInterval(1 * time.Minute)

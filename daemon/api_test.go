@@ -409,6 +409,8 @@ func (m *fakeSnapManager) Ensure() error {
 	return nil
 }
 
+func (m *fakeSnapManager) Kind() string { return "fake" }
+
 // sanity
 var _ overlord.StateManager = (*fakeSnapManager)(nil)
 
