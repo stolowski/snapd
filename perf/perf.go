@@ -87,7 +87,7 @@ func makeRingBuffer() *RingBuffer {
 	return NewRingBuffer(1024)
 }
 
-func TimedRun(summary string, fn func(*TrivialSample)) *TrivialSample {
+func NestedTimedRun(summary string, fn func(*TrivialSample)) *TrivialSample {
 	sample := &TrivialSample{
 		Summary: summary,
 	}
@@ -98,7 +98,7 @@ func TimedRun(summary string, fn func(*TrivialSample)) *TrivialSample {
 	return sample
 }
 
-func LeafTimedRun(summary string, fn func()) *TrivialSample {
+func TimedRun(summary string, fn func()) *TrivialSample {
 	sample := &TrivialSample{
 		Summary: summary,
 	}

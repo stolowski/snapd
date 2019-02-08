@@ -372,7 +372,7 @@ func (b *Backend) Setup(ctx context.Context, snapInfo *snap.Info, opts interface
 		pathnames[i] = filepath.Join(dir, profile)
 	}
 	var errReloadChanged error
-	sample := perf.LeafTimedRun("reload changed profiles", func() {
+	sample := perf.TimedRun("reload changed profiles", func() {
 		errReloadChanged = loadProfiles(pathnames, cache, skipReadCache)
 	})
 	perf.SampleFromContext(ctx).Append(sample)
@@ -386,13 +386,13 @@ func (b *Backend) Setup(ctx context.Context, snapInfo *snap.Info, opts interface
 	}
 
 	var errReloadOther error
-	sample = perf.LeafTimedRun("reload other profiles", func() {
+	sample = perf.TimedRun("reload other profiles", func() {
 		errReloadOther = loadProfiles(pathnames, cache, 0)
 	})
 	perf.SampleFromContext(ctx).Append(sample)
 
 	var errUnload error
-	sample = perf.LeafTimedRun("unload removed profiles", func() {
+	sample = perf.TimedRun("unload removed profiles", func() {
 		errUnload = unloadProfiles(removed, cache)
 	})
 	perf.SampleFromContext(ctx).Append(sample)

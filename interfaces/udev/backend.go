@@ -60,7 +60,7 @@ func snapRulesFilePath(snapName string) string {
 
 func TimedReloadRules(ctx context.Context, subsystemTriggers []string) error {
 	var err error
-	sample := perf.LeafTimedRun("reload rules", func() {
+	sample := perf.TimedRun("reload rules", func() {
 		err = ReloadRules(subsystemTriggers)
 	})
 	perf.SampleFromContext(ctx).Append(sample)

@@ -153,7 +153,7 @@ func (b *Backend) Setup(ctx context.Context, snapInfo *snap.Info, opts interface
 		seccompToBpf := seccompToBpfPath()
 		cmd := exec.Command(seccompToBpf, "compile", in, out)
 		var output []byte
-		sample := perf.TimedRun(fmt.Sprintf("seccomp BPF compile %s", c), func(_ *perf.TrivialSample) {
+		sample := perf.TimedRun(fmt.Sprintf("seccomp BPF compile %s", c), func() {
 			output, err = cmd.CombinedOutput()
 		})
 		perf.SampleFromContext(ctx).Append(sample)

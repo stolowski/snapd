@@ -200,7 +200,7 @@ func (m *InterfaceManager) regenerateAllSecurityProfiles(ctx context.Context) er
 			}
 			// Refresh security of this snap and backend
 			var err error
-			sample := perf.TimedRun(fmt.Sprintf("regenerate %s profile for %s", backend.Name(), snapInfo.InstanceName()),
+			sample := perf.NestedTimedRun(fmt.Sprintf("regenerate %s profile for %s", backend.Name(), snapInfo.InstanceName()),
 				func(nested *perf.TrivialSample) {
 					err = backend.Setup(perf.SampleWithContext(ctx, nested), snapInfo, opts, m.repo)
 				})
@@ -345,7 +345,7 @@ func (m *InterfaceManager) setupSecurityByBackend(ctx context.Context, task *sta
 		for i, snapInfo := range snaps {
 			st.Unlock()
 			var err error
-			sample := perf.TimedRun(fmt.Sprintf("setup security by backend %s snap %s", backend.Name(), snapInfo.InstanceName()),
+			sample := perf.NestedTimedRun(fmt.Sprintf("setup security by backend %s snap %s", backend.Name(), snapInfo.InstanceName()),
 				func(nested *perf.TrivialSample) {
 					err = backend.Setup(perf.SampleWithContext(ctx, nested), snapInfo, opts[i], m.repo)
 				})
@@ -368,7 +368,7 @@ func (m *InterfaceManager) setupSnapSecurity(ctx context.Context, task *state.Ta
 	for _, backend := range m.repo.Backends() {
 		st.Unlock()
 		var err error
-		sample := perf.TimedRun(fmt.Sprintf("setup snap security backend %s snap %s", backend.Name(), snapInfo.InstanceName()), func(nested *perf.TrivialSample) {
+		sample := perf.NestedTimedRun(fmt.Sprintf("setup snap security backend %s snap %s", backend.Name(), snapInfo.InstanceName()), func(nested *perf.TrivialSample) {
 			err = backend.Setup(perf.SampleWithContext(ctx, nested), snapInfo, opts, m.repo)
 		})
 		st.Lock()
@@ -386,7 +386,7 @@ func (m *InterfaceManager) removeSnapSecurity(ctx context.Context, task *state.T
 	for _, backend := range m.repo.Backends() {
 		st.Unlock()
 		var err error
-		sample := perf.TimedRun(fmt.Sprintf("remove snap security backend %s snap %s", backend.Name(), instanceName),
+		sample := perf.NestedTimedRun(fmt.Sprintf("remove snap security backend %s snap %s", backend.Name(), instanceName),
 			func(_ *perf.TrivialSample) {
 				err = backend.Remove(instanceName)
 			})

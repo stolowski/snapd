@@ -164,7 +164,7 @@ func (m *DeviceManager) doGenerateDeviceKey(t *state.Task, tmb *tomb.Tomb) error
 	parentSample := perf.SampleFromContext(tmb.Context(nil))
 	st.Unlock()
 	var keyPair *rsa.PrivateKey
-	sample := perf.TimedRun("generate key", func(_ *perf.TrivialSample) {
+	sample := perf.TimedRun("generate key", func() {
 		keyPair, err = generateRSAKey(keyLength)
 	})
 	st.Lock()
@@ -174,7 +174,7 @@ func (m *DeviceManager) doGenerateDeviceKey(t *state.Task, tmb *tomb.Tomb) error
 	}
 
 	var privKey asserts.PrivateKey
-	sample = perf.TimedRun("generate asserts private key", func(_ *perf.TrivialSample) {
+	sample = perf.TimedRun("generate asserts private key", func() {
 		privKey = asserts.RSAPrivateKey(keyPair)
 	})
 	parentSample.Append(sample)

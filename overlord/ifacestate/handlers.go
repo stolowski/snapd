@@ -462,7 +462,7 @@ func (m *InterfaceManager) doConnect(task *state.Task, tomb *tomb.Tomb) error {
 	ctx := tomb.Context(nil)
 	parentSample := perf.SampleFromContext(ctx)
 	slotOpts := confinementOptions(slotSnapst.Flags)
-	sample := perf.TimedRun("setup slot security", func(sample *perf.TrivialSample) {
+	sample := perf.NestedTimedRun("setup slot security", func(sample *perf.TrivialSample) {
 		err = m.setupSnapSecurity(perf.SampleWithContext(ctx, sample), task, slot.Snap, slotOpts)
 	})
 	parentSample.Append(sample)
@@ -470,7 +470,7 @@ func (m *InterfaceManager) doConnect(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 	plugOpts := confinementOptions(plugSnapst.Flags)
-	sample = perf.TimedRun("setup plug security", func(sample *perf.TrivialSample) {
+	sample = perf.NestedTimedRun("setup plug security", func(sample *perf.TrivialSample) {
 		m.setupSnapSecurity(perf.SampleWithContext(ctx, sample), task, plug.Snap, plugOpts)
 	})
 	if err != nil {
