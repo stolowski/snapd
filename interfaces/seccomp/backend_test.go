@@ -20,6 +20,7 @@
 package seccomp_test
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -215,7 +216,7 @@ func (s *backendSuite) TestUpdatingSnapToOneWithNoHooks(c *C) {
 func (s *backendSuite) TestRealDefaultTemplateIsNormallyUsed(c *C) {
 	snapInfo := snaptest.MockInfo(c, ifacetest.SambaYamlV1, nil)
 	// NOTE: we don't call seccomp.MockTemplate()
-	err := s.Backend.Setup(snapInfo, interfaces.ConfinementOptions{}, s.Repo)
+	err := s.Backend.Setup(context.Background(), snapInfo, interfaces.ConfinementOptions{}, s.Repo)
 	c.Assert(err, IsNil)
 	profile := filepath.Join(dirs.SnapSeccompDir, "snap.samba.smbd")
 	data, err := ioutil.ReadFile(profile + ".src")
@@ -336,7 +337,7 @@ func (s *backendSuite) TestBindIsAddedForForcedDevModeSystems(c *C) {
 
 	snapInfo := snaptest.MockInfo(c, ifacetest.SambaYamlV1, nil)
 	// NOTE: we don't call seccomp.MockTemplate()
-	err := s.Backend.Setup(snapInfo, interfaces.ConfinementOptions{}, s.Repo)
+	err := s.Backend.Setup(context.Background(), snapInfo, interfaces.ConfinementOptions{}, s.Repo)
 	c.Assert(err, IsNil)
 	profile := filepath.Join(dirs.SnapSeccompDir, "snap.samba.smbd")
 	c.Assert(profile+".src", testutil.FileContains, "\nbind\n")
@@ -348,7 +349,7 @@ func (s *backendSuite) TestSocketcallIsAddedWhenRequired(c *C) {
 
 	snapInfo := snaptest.MockInfo(c, ifacetest.SambaYamlV1, nil)
 	// NOTE: we don't call seccomp.MockTemplate()
-	err := s.Backend.Setup(snapInfo, interfaces.ConfinementOptions{}, s.Repo)
+	err := s.Backend.Setup(context.Background(), snapInfo, interfaces.ConfinementOptions{}, s.Repo)
 	c.Assert(err, IsNil)
 	profile := filepath.Join(dirs.SnapSeccompDir, "snap.samba.smbd")
 	c.Assert(profile+".src", testutil.FileContains, "\nsocketcall\n")
@@ -360,7 +361,7 @@ func (s *backendSuite) TestSocketcallIsNotAddedWhenNotRequired(c *C) {
 
 	snapInfo := snaptest.MockInfo(c, ifacetest.SambaYamlV1, nil)
 	// NOTE: we don't call seccomp.MockTemplate()
-	err := s.Backend.Setup(snapInfo, interfaces.ConfinementOptions{}, s.Repo)
+	err := s.Backend.Setup(context.Background(), snapInfo, interfaces.ConfinementOptions{}, s.Repo)
 	c.Assert(err, IsNil)
 	profile := filepath.Join(dirs.SnapSeccompDir, "snap.samba.smbd")
 	c.Assert(profile+".src", Not(testutil.FileContains), "\nsocketcall\n")

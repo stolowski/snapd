@@ -21,6 +21,7 @@ package udev_test
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 
@@ -149,7 +150,7 @@ func (s *backendSuite) TestSecurityIsStable(c *C) {
 	for _, opts := range testedConfinementOpts {
 		snapInfo := s.InstallSnap(c, opts, "", ifacetest.SambaYamlV1, 0)
 		s.udevadmCmd.ForgetCalls()
-		err := s.Backend.Setup(snapInfo, opts, s.Repo)
+		err := s.Backend.Setup(context.Background(), snapInfo, opts, s.Repo)
 		c.Assert(err, IsNil)
 		// rules are not re-loaded when nothing changes
 		c.Check(s.udevadmCmd.Calls(), HasLen, 0)

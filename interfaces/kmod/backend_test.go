@@ -20,6 +20,7 @@
 package kmod_test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -124,7 +125,7 @@ func (s *backendSuite) TestSecurityIsStable(c *C) {
 	for _, opts := range testedConfinementOpts {
 		snapInfo := s.InstallSnap(c, opts, "", ifacetest.SambaYamlV1, 0)
 		s.modprobeCmd.ForgetCalls()
-		err := s.Backend.Setup(snapInfo, opts, s.Repo)
+		err := s.Backend.Setup(context.Background(), snapInfo, opts, s.Repo)
 		c.Assert(err, IsNil)
 		// modules conf is not re-loaded when nothing changes
 		c.Check(s.modprobeCmd.Calls(), HasLen, 0)

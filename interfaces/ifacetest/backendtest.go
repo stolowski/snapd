@@ -20,6 +20,8 @@
 package ifacetest
 
 import (
+	"context"
+
 	. "gopkg.in/check.v1"
 
 	"github.com/snapcore/snapd/dirs"
@@ -159,7 +161,7 @@ func (s *BackendSuite) InstallSnap(c *C, opts interfaces.ConfinementOptions, ins
 	}
 
 	s.addPlugsSlots(c, snapInfo)
-	err := s.Backend.Setup(snapInfo, opts, s.Repo)
+	err := s.Backend.Setup(context.Background(), snapInfo, opts, s.Repo)
 	c.Assert(err, IsNil)
 	return snapInfo
 }
@@ -172,7 +174,7 @@ func (s *BackendSuite) UpdateSnap(c *C, oldSnapInfo *snap.Info, opts interfaces.
 	c.Assert(newSnapInfo.InstanceName(), Equals, oldSnapInfo.InstanceName())
 	s.removePlugsSlots(c, oldSnapInfo)
 	s.addPlugsSlots(c, newSnapInfo)
-	err := s.Backend.Setup(newSnapInfo, opts, s.Repo)
+	err := s.Backend.Setup(context.Background(), newSnapInfo, opts, s.Repo)
 	c.Assert(err, IsNil)
 	return newSnapInfo
 }
