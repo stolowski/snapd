@@ -1823,6 +1823,20 @@ func snapNamesFromConns(conns []*interfaces.ConnRef) []string {
 	return l
 }
 
+func snapNamesFromConnections(conns []*interfaces.Connection) []string {
+	m := make(map[string]bool)
+	for _, conn := range conns {
+		m[conn.Plug.Snap().InstanceName()] = true
+		m[conn.Slot.Snap().InstanceName()] = true
+	}
+	l := make([]string, 0, len(m))
+	for name := range m {
+		l = append(l, name)
+	}
+	sort.Strings(l)
+	return l
+}
+
 // changeInterfaces controls the interfaces system.
 // Plugs can be connected to and disconnected from slots.
 func changeInterfaces(c *Command, r *http.Request, user *auth.UserState) Response {
@@ -1879,7 +1893,7 @@ func changeInterfaces(c *Command, r *http.Request, user *auth.UserState) Respons
 			tasksets = append(tasksets, ts)
 		}
 	case "disconnect":
-		var conns []*interfaces.ConnRef
+		var conns []*interfaces.Connection
 		repo := c.d.overlord.InterfaceManager().Repository()
 		summary = fmt.Sprintf("Disconnect %s:%s from %s:%s", a.Plugs[0].Snap, a.Plugs[0].Name, a.Slots[0].Snap, a.Slots[0].Name)
 		conns, err = repo.ResolveDisconnect(a.Plugs[0].Snap, a.Plugs[0].Name, a.Slots[0].Snap, a.Slots[0].Name)
@@ -1887,13 +1901,8 @@ func changeInterfaces(c *Command, r *http.Request, user *auth.UserState) Respons
 			if len(conns) == 0 {
 				return InterfacesUnchanged("nothing to do")
 			}
-			for _, connRef := range conns {
+			for _, conn := range conns {
 				var ts *state.TaskSet
-				var conn *interfaces.Connection
-				conn, err = repo.Connection(connRef)
-				if err != nil {
-					break
-				}
 				ts, err = ifacestate.Disconnect(st, conn)
 				if err != nil {
 					break
@@ -1901,7 +1910,7 @@ func changeInterfaces(c *Command, r *http.Request, user *auth.UserState) Respons
 				ts.JoinLane(st.NewLane())
 				tasksets = append(tasksets, ts)
 			}
-			affected = snapNamesFromConns(conns)
+			affected = snapNamesFromConnections(conns)
 		}
 	}
 	if err != nil {

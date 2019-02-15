@@ -734,7 +734,7 @@ func (r *Repository) Connected(snapName, plugOrSlotName string) ([]*ConnRef, err
 		return nil, err
 	}
 
-	var connRefs []*ConnRef
+	connRefs := make([]*ConnRef, 0, len(conns))
 	for _, conn := range conns {
 		connRefs = append(connRefs, conn.ConnRef())
 	}
