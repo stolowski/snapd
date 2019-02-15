@@ -34,6 +34,14 @@ type Connection struct {
 	Slot *ConnectedSlot
 }
 
+// ConnRef creates a connection reference for this connection' plug and slot
+func (c *Connection) ConnRef() *ConnRef {
+	return &ConnRef{
+		PlugRef: *c.Plug.Ref(),
+		SlotRef: *c.Slot.Ref(),
+	}
+}
+
 // ConnectedPlug represents a plug that is connected to a slot.
 type ConnectedPlug struct {
 	plugInfo     *snap.PlugInfo

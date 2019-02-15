@@ -1289,14 +1289,15 @@ func (s *RepositorySuite) TestResolveDisconnectMatrixTypical(c *C) {
 	}
 	for i, scenario := range scenarios {
 		c.Logf("checking scenario %d: %q", i, scenario)
-		connRefList, err := s.testRepo.ResolveDisconnect(
+		connList, err := s.testRepo.ResolveDisconnect(
 			scenario.plugSnapName, scenario.plugName, scenario.slotSnapName, scenario.slotName)
 		if scenario.errMsg != "" {
 			c.Check(err, ErrorMatches, scenario.errMsg)
-			c.Check(connRefList, HasLen, 0)
+			c.Check(connList, HasLen, 0)
 		} else {
 			c.Check(err, IsNil)
-			c.Check(connRefList, DeepEquals, []*ConnRef{connRef})
+			c.Assert(connList, HasLen, 1)
+			c.Check(connList[0].ConnRef(), DeepEquals, connRef)
 		}
 	}
 }

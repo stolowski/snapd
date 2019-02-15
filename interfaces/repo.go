@@ -536,7 +536,7 @@ func (r *Repository) ResolveConnect(plugSnapName, plugName, slotSnapName, slotNa
 // In both cases the snap name can be omitted to implicitly refer to the core
 // snap. If there's no core snap it is simply assumed to be called "core" to
 // provide consistent error messages.
-func (r *Repository) ResolveDisconnect(plugSnapName, plugName, slotSnapName, slotName string) ([]*ConnRef, error) {
+func (r *Repository) ResolveDisconnect(plugSnapName, plugName, slotSnapName, slotName string) ([]*Connection, error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
@@ -572,11 +572,12 @@ func (r *Repository) ResolveDisconnect(plugSnapName, plugName, slotSnapName, slo
 			return nil, fmt.Errorf("snap %q has no slot named %q", slotSnapName, slotName)
 		}
 		// Ensure that slot and plug are connected
-		if r.slotPlugs[slot][plug] == nil {
+		conn := r.slotPlugs[slot][plug]
+		if conn == nil {
 			return nil, fmt.Errorf("cannot disconnect %s:%s from %s:%s, it is not connected",
 				plugSnapName, plugName, slotSnapName, slotName)
 		}
-		return []*ConnRef{NewConnRef(plug, slot)}, nil
+		return []*Connection{conn}, nil
 	// 2: <snap>:<plug or slot> (through 1st pair)
 	// Return a list of connections involving specified plug or slot.
 	case plugName != "" && slotName == "" && slotSnapName == "":
@@ -728,17 +729,26 @@ func (r *Repository) Connected(snapName, plugOrSlotName string) ([]*ConnRef, err
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	return r.connected(snapName, plugOrSlotName)
+	conns, err := r.connected(snapName, plugOrSlotName)
+	if err != nil {
+		return nil, err
+	}
+
+	var connRefs []*ConnRef
+	for _, conn := range conns {
+		connRefs = append(connRefs, conn.ConnRef())
+	}
+	return connRefs, nil
 }
 
-func (r *Repository) connected(snapName, plugOrSlotName string) ([]*ConnRef, error) {
+func (r *Repository) connected(snapName, plugOrSlotName string) ([]*Connection, error) {
 	if snapName == "" {
 		snapName, _ = r.guessSystemSnapName()
 		if snapName == "" {
 			return nil, fmt.Errorf("internal error: cannot obtain core snap name while computing connections")
 		}
 	}
-	var conns []*ConnRef
+	var conns []*Connection
 	if plugOrSlotName == "" {
 		return nil, fmt.Errorf("plug or slot name is empty")
 	}
@@ -749,16 +759,14 @@ func (r *Repository) connected(snapName, plugOrSlotName string) ([]*ConnRef, err
 	// Collect all the relevant connections
 
 	if plug, ok := r.plugs[snapName][plugOrSlotName]; ok {
-		for slotInfo := range r.plugSlots[plug] {
-			connRef := NewConnRef(plug, slotInfo)
-			conns = append(conns, connRef)
+		for _, conn := range r.plugSlots[plug] {
+			conns = append(conns, conn)
 		}
 	}
 
 	if slot, ok := r.slots[snapName][plugOrSlotName]; ok {
-		for plugInfo := range r.slotPlugs[slot] {
-			connRef := NewConnRef(plugInfo, slot)
-			conns = append(conns, connRef)
+		for _, conn := range r.slotPlugs[slot] {
+			conns = append(conns, conn)
 		}
 	}
 
