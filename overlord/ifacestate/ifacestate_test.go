@@ -2357,6 +2357,63 @@ func (s *interfaceManagerSuite) TestDoSetupSnapSecurityKeepsExistingConnectionSt
 	})
 }
 
+// LP:#1825883; make sure static attributes in conns state are updated from the snap yaml on snap refresh
+func (s *interfaceManagerSuite) testDoSetupProfilesUpdatesStaticAttributes(c *C, refreshedSnap *snap.Info, expectedPlugAttr, expectedSlotAttr string) {
+	_ = s.manager(c)
+
+	s.state.Lock()
+	s.state.Set("conns", map[string]interface{}{
+		"consumer2:plug producer:slot": map[string]interface{}{
+			"interface":   "test",
+			"plug-static": map[string]interface{}{"attr1": "existing-plug-attr-value"},
+			"slot-static": map[string]interface{}{"attr2": "existing-slot-attr-value"},
+		},
+		"other:plug core:network": map[string]interface{}{
+			"interface": "network",
+		},
+	})
+
+	change := s.state.NewChange("test", "")
+	task := s.state.NewTask("setup-profiles", "")
+	sup := &snapstate.SnapSetup{SideInfo: &snap.SideInfo{RealName: refreshedSnap.SnapName(), Revision: refreshedSnap.Revision}}
+	task.Set("snap-setup", sup)
+	change.AddTask(task)
+	s.state.Unlock()
+
+	s.settle(c)
+
+	s.state.Lock()
+	defer s.state.Unlock()
+
+	c.Assert(change.Status(), Equals, state.DoneStatus)
+
+	// verify that static attributes on the plug side were updated
+	var conns map[string]interface{}
+	c.Assert(s.state.Get("conns", &conns), IsNil)
+	c.Check(conns, DeepEquals, map[string]interface{}{
+		"consumer2:plug producer:slot": map[string]interface{}{
+			"interface":   "test",
+			"plug-static": map[string]interface{}{"attr1": expectedPlugAttr},
+			"slot-static": map[string]interface{}{"attr2": expectedSlotAttr},
+		},
+		"other:plug core:network": map[string]interface{}{
+			"interface": "network",
+		},
+	})
+}
+
+func (s *interfaceManagerSuite) TestDoSetupProfilesUpdatesStaticAttributesPlugSnap(c *C) {
+	s.mockSnap(c, producerYaml)
+	snapInfo := s.mockSnap(c, consumer2Yaml)
+	s.testDoSetupProfilesUpdatesStaticAttributes(c, snapInfo, "value1", "existing-slot-attr-value")
+}
+
+func (s *interfaceManagerSuite) TestDoSetupProfilesUpdatesStaticAttributesSlotSnap(c *C) {
+	snapInfo := s.mockSnap(c, producerYaml)
+	s.mockSnap(c, consumer2Yaml)
+	s.testDoSetupProfilesUpdatesStaticAttributes(c, snapInfo, "existing-plug-attr-value", "value2")
+}
+
 func (s *interfaceManagerSuite) TestDoSetupSnapSecurityIgnoresStrayConnection(c *C) {
 	// Add an OS snap
 	snapInfo := s.mockSnap(c, ubuntuCoreSnapYaml)
