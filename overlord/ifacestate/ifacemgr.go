@@ -141,8 +141,11 @@ func (m *InterfaceManager) Ensure() error {
 	// don't initialize udev monitor until we have a system snap so that we
 	// can attach hotplug interfaces to it.
 	if !checkSystemSnapIsPresent(m.state) {
+		logger.Noticef("System snap NOT present, expected system snap %q", SystemSnapName())
 		return nil
 	}
+
+	logger.Debugf("System snap is present, expected system snap %q", SystemSnapName())
 
 	// retry udev monitor initialization every 5 minutes
 	now := time.Now()
