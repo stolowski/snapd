@@ -21,6 +21,7 @@ package timings_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -434,4 +435,37 @@ func (s *timingsSuite) TestGet(c *C) {
 			},
 		},
 	})
+}
+
+func (s *timingsSuite) TestGetDurationNumberUnmarshalling(c *C) {
+	s.st.Lock()
+	defer s.st.Unlock()
+
+	states := []struct {
+		stateJSON string
+		expected  time.Duration
+	}{
+		{
+			stateJSON: `{"data":{"timings":[{"timings":[{"label":"a","duration":4.39e+08}],"start-time":"2019-03-11T09:01:00.001Z","stop-time":"2019-03-11T09:01:00.002Z"}]}}`,
+			expected:  time.Duration(439000000),
+		},
+		{
+			stateJSON: `{"data":{"timings":[{"timings":[{"label":"a","duration":5000000}],"start-time":"2019-03-11T09:01:00.001Z","stop-time":"2019-03-11T09:01:00.002Z"}]}}`,
+			expected:  time.Duration(5000000),
+		},
+	}
+
+	for _, stateData := range states {
+		r := strings.NewReader(stateData.stateJSON)
+		st, err := state.ReadState(nil, r)
+		c.Assert(err, IsNil)
+
+		st.Lock()
+		data, err := timings.Get(st, 0, func(tags map[string]string) bool { return true })
+		st.Unlock()
+		c.Assert(err, IsNil)
+		c.Assert(data, HasLen, 1)
+		c.Assert(data[0].NestedTimings, HasLen, 1)
+		c.Check(time.Duration(data[0].NestedTimings[0].Duration), Equals, stateData.expected)
+	}
 }
