@@ -72,6 +72,8 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 		return nil, fmt.Errorf("cannot populate state: already seeded")
 	}
 
+	// XXX
+	prebakeDone := st.NewTask("pre-bake-done", i18n.G("Image pre-bake barrier"))
 	markSeeded := st.NewTask("mark-seeded", i18n.G("Mark system seeded"))
 
 	deviceSeed, err := seed.Open(dirs.SnapSeedDir)
@@ -200,7 +202,11 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 		endTs.AddTask(gadgetConnect)
 		ts = endTs
 	}
-	markSeeded.WaitAll(ts)
+
+	// XXX prebakeDone needs to be somewhere else
+	prebakeDone.WaitAll(ts)
+	markSeeded.WaitAll(state.NewTaskSet(prebakeDone))
+	//markSeeded.WaitAll(ts)
 	endTs.AddTask(markSeeded)
 	tsAll = append(tsAll, endTs)
 

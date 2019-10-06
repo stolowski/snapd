@@ -685,6 +685,16 @@ WantedBy=multi-user.target
 		return "", err
 	}
 
+	// XXX
+	// Image pre-bake mode: mount the target but do not trigger systemd
+	if osutil.IsPrebakeMode() {
+		cmd := exec.Command("/usr/bin/mount", "-t", fstype, what, where, "-o", strings.Join(options, ","))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("cannot mount %s (%s) at %s in pre-bake mode: %s; %s", what, where, fstype, err, string(out))
+		}
+		return mountUnitName, nil
+	}
+
 	// we need to do a daemon-reload here to ensure that systemd really
 	// knows about this new mount unit file
 	if err := s.daemonReloadNoLock(); err != nil {

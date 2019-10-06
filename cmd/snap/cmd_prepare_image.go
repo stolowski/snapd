@@ -82,7 +82,10 @@ For preparing classic images it supports a --classic mode`),
 		})
 }
 
-var imagePrepare = image.Prepare
+var (
+	imagePrepare = image.Prepare
+	imagePrebake = image.Prebake
+)
 
 func (x *cmdPrepareImage) Execute(args []string) error {
 	opts := &image.Options{
@@ -119,5 +122,9 @@ func (x *cmdPrepareImage) Execute(args []string) error {
 		opts.GadgetUnpackDir = filepath.Join(x.Positional.Rootdir, "gadget")
 	}
 
-	return imagePrepare(opts)
+	if err := imagePrepare(opts); err != nil {
+		return err
+	}
+
+	return imagePrebake(opts)
 }

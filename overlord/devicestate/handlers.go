@@ -54,10 +54,26 @@ import (
 	"github.com/snapcore/snapd/timings"
 )
 
+func (m *DeviceManager) doPrebakeDone(t *state.Task, _ *tomb.Tomb) error {
+	st := t.State()
+	st.Lock()
+	defer st.Unlock()
+
+	t.SetStatus(state.DoneStatus)
+	st.RequestRestart(state.StopSnapd)
+
+	return nil
+}
+
 func (m *DeviceManager) doMarkSeeded(t *state.Task, _ *tomb.Tomb) error {
 	st := t.State()
 	st.Lock()
 	defer st.Unlock()
+
+	// XXX
+	if osutil.IsPrebakeMode() {
+		return &state.Retry{Reason: "waiting for pre-bake mode to finish"}
+	}
 
 	st.Set("seed-time", time.Now())
 	st.Set("seeded", true)

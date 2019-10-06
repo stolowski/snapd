@@ -30,6 +30,7 @@ import (
 	"github.com/snapcore/snapd/boot"
 	"github.com/snapcore/snapd/dirs"
 	"github.com/snapcore/snapd/i18n"
+	"github.com/snapcore/snapd/osutil"
 	"github.com/snapcore/snapd/overlord/assertstate"
 	"github.com/snapcore/snapd/overlord/auth"
 	"github.com/snapcore/snapd/overlord/configstate/config"
@@ -91,6 +92,7 @@ func Manager(s *state.State, hookManager *hookstate.HookManager, runner *state.T
 
 	runner.AddHandler("generate-device-key", m.doGenerateDeviceKey, nil)
 	runner.AddHandler("request-serial", m.doRequestSerial, nil)
+	runner.AddHandler("pre-bake-done", m.doPrebakeDone, nil)
 	runner.AddHandler("mark-seeded", m.doMarkSeeded, nil)
 	runner.AddHandler("prepare-remodeling", m.doPrepareRemodeling, nil)
 	runner.AddCleanup("prepare-remodeling", m.cleanupRemodel)
@@ -521,16 +523,19 @@ func (m *DeviceManager) Ensure() error {
 	if err := m.ensureSeedYaml(); err != nil {
 		errs = append(errs, err)
 	}
-	if err := m.ensureOperational(); err != nil {
-		errs = append(errs, err)
-	}
 
-	if err := m.ensureBootOk(); err != nil {
-		errs = append(errs, err)
-	}
+	if !osutil.IsPrebakeMode() {
+		if err := m.ensureOperational(); err != nil {
+			errs = append(errs, err)
+		}
 
-	if err := m.ensureSeedInConfig(); err != nil {
-		errs = append(errs, err)
+		if err := m.ensureBootOk(); err != nil {
+			errs = append(errs, err)
+		}
+
+		if err := m.ensureSeedInConfig(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	if len(errs) > 0 {

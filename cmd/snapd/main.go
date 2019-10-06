@@ -53,6 +53,11 @@ func init() {
 func main() {
 	cmd.ExecInSnapdOrCoreSnap()
 
+	// XXX
+	if osutil.IsPrebakeMode() {
+		fmt.Fprintf(os.Stderr, "prebake image mode\n")
+	}
+
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	if err := run(ch); err != nil {
