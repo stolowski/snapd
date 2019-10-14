@@ -26,6 +26,7 @@ import (
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/backends"
 	"github.com/snapcore/snapd/logger"
+	"github.com/snapcore/snapd/osutil"
 	"github.com/snapcore/snapd/overlord/hookstate"
 	"github.com/snapcore/snapd/overlord/ifacestate/ifacerepo"
 	"github.com/snapcore/snapd/overlord/ifacestate/udevmonitor"
@@ -179,6 +180,11 @@ func (m *InterfaceManager) StartUp() error {
 
 // Ensure implements StateManager.Ensure.
 func (m *InterfaceManager) Ensure() error {
+	// do not worry about udev monitor in prebake mode
+	if osutil.IsPrebakeMode() {
+		return nil
+	}
+
 	if m.udevMonitorDisabled {
 		return nil
 	}
