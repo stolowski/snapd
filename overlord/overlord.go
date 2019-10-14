@@ -321,6 +321,9 @@ func (o *Overlord) StartUp() error {
 // StartupTimeout computes a usable timeout for the startup
 // initializations by using a pessimistic estimate.
 func (o *Overlord) StartupTimeout() (timeout time.Duration, reasoning string, err error) {
+	if osutil.IsPrebakeMode() {
+		return 0, "", nil
+	}
 	// TODO: adjust based on real hardware measurements
 	st := o.State()
 	st.Lock()

@@ -31,6 +31,11 @@ func ExecInSnapdOrCoreSnap() {
 	return
 }
 
+// PrebakeChroot runs snapd in a chroot dir pointed by SNAPD_PREBAKE_IMAGE environment variable
+func PrebakeChroot() error {
+	return errors.New("image-prebaking not available for systems other than linux")
+}
+
 // InternalToolPath returns the path of an internal snapd tool. The tool
 // *must* be located inside the same tree as the current binary.
 //

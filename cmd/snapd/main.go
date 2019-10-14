@@ -54,8 +54,13 @@ func main() {
 	cmd.ExecInSnapdOrCoreSnap()
 
 	// XXX
+	// TODO: if re-run in prebake mode with tasks, undo/wipe everything and start from scratch?
 	if osutil.IsPrebakeMode() {
-		fmt.Fprintf(os.Stderr, "prebake image mode\n")
+		if err := cmd.PrebakeChroot(); err != nil {
+			fmt.Fprintf(os.Stderr, "cannot enter prebake image mode: %v\n", err)
+			os.Exit(1)
+		}
+		logger.Noticef("running in prebake image mode")
 	}
 
 	ch := make(chan os.Signal, 2)
