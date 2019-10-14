@@ -796,6 +796,10 @@ func (m *SnapManager) localInstallCleanup() error {
 
 // Ensure implements StateManager.Ensure.
 func (m *SnapManager) Ensure() error {
+	if osutil.IsPrebakeMode() {
+		return nil
+	}
+
 	// do not exit right away on error
 	errs := []error{
 		m.atSeed(),
