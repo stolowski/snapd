@@ -135,22 +135,28 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 	configTss := []*state.TaskSet{}
 	chainTs := func(all []*state.TaskSet, ts *state.TaskSet) []*state.TaskSet {
 		n := len(all)
-		if n != 0 {
-			if prebakeMode {
-				// prebake-barrier task needs to be inserted between preliminary setup and hook tasks
-				prereqTask, preliminarySetup, hookTask, _ := criticalTasks(ts)
-				_, preliminarySetupPrev, _, _ := criticalTasks(all[n-1])
-				// XXX: ugly, find a better way; this is to deal with configTss
-				if prereqTask != nil {
-					hookTask.WaitFor(prebakeDone)
-					if preliminarySetupPrev != nil {
-						prereqTask.WaitFor(preliminarySetupPrev)
-					}
-					prebakeDone.WaitFor(preliminarySetup)
-				} else {
-					ts.WaitAll(all[n-1])
+		if prebakeMode {
+			// prebake-barrier task needs to be inserted between preliminary setup and hook tasks
+			prereqTask, preliminarySetup, hookTask, _ := criticalTasks(ts)
+			var preliminarySetupPrev *state.Task
+			if n > 0 {
+				_, preliminarySetupPrev, _, _ = criticalTasks(all[n-1])
+			}
+			// XXX: ugly, find a better way; this is to deal with configTss
+			if prereqTask != nil {
+				hookTask.WaitFor(prebakeDone)
+				if preliminarySetupPrev != nil {
+					prereqTask.WaitFor(preliminarySetupPrev)
 				}
+				prebakeDone.WaitFor(preliminarySetup)
+				fmt.Printf("%s [%s] waitfor %s [%s]\n", prebakeDone.Kind(), prebakeDone.ID(), preliminarySetup.Kind(), preliminarySetup.ID())
 			} else {
+				if n != 0 {
+					ts.WaitAll(all[n-1]) // XXX config tasks
+				}
+			}
+		} else {
+			if n != 0 {
 				ts.WaitAll(all[n-1])
 			}
 		}
@@ -183,22 +189,10 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 			// wait for the previous configTss
 			configTss = chainTs(configTss, configTs)
 		}
-		// XXX
-		/*if prebakeMode {
-			// prebake-barrier task needs to be inserted between preliminary setup and hook tasks
-			preliminarySetup, err := ts.Edge(snapstate.PreliminarySnapSetupDoneEdge)
-			if err != nil {
-				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
-			}
-			hookTask, err := ts.Edge(snapstate.PreliminarySnapSetupHooksEdge)
-			if err != nil {
-				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
-			}
-			prebakeDone.WaitFor(preliminarySetup)
-			hookTask.WaitFor(prebakeDone)
-		}*/
+
 		essInfos = append(essInfos, info)
 		essInfoToTs[info] = ts
+		fmt.Printf("ess: %s\n", info.SnapName())
 		allSnapInfos[info.SnapName()] = info
 	}
 	// now add/chain the tasksets in the right order based on essential
@@ -225,21 +219,6 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 		infos = append(infos, info)
 		infoToTs[info] = ts
 		allSnapInfos[info.SnapName()] = info
-
-		// XXX
-		/*if prebakeMode {
-			// prebake-barrier task needs to be inserted between preliminary setup and hook tasks
-			preliminarySetup, err := ts.Edge(snapstate.PreliminarySnapSetupDoneEdge)
-			if err != nil {
-				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
-			}
-			hookTask, err := ts.Edge(snapstate.PreliminarySnapSetupHooksEdge)
-			if err != nil {
-				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
-			}
-			prebakeDone.WaitFor(preliminarySetup)
-			hookTask.WaitFor(prebakeDone)
-		}*/
 	}
 
 	// validate that all snaps have bases
