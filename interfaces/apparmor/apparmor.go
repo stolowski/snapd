@@ -98,6 +98,12 @@ func loadProfiles(fnames []string, cacheDir string, flags aaParserFlags) error {
 			args = append(args, jobArg)
 		}
 	}
+
+	if osutil.IsPrebakeMode() {
+		// do not load kernel profiles when pre-baking an image in chroot environment
+		args = append(args, "--skip-kernel-load")
+	}
+
 	if flags&skipReadCache != 0 {
 		args = append(args, "--skip-read-cache")
 	}

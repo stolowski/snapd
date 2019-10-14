@@ -59,8 +59,12 @@ func (m *DeviceManager) doPrebakeDone(t *state.Task, _ *tomb.Tomb) error {
 	st.Lock()
 	defer st.Unlock()
 
-	t.SetStatus(state.DoneStatus)
-	st.RequestRestart(state.StopSnapd)
+	if osutil.IsPrebakeMode() {
+		// do not mark this task done as this makes it racy against taskrunner tear down (the next task
+		// could start). Let this task finish after snapd restart when prebake mode is off.
+		st.RequestRestart(state.StopSnapd)
+		return &state.Retry{Reason: "pre-bake mode will be marked done without pre-bake mode"}
+	}
 
 	return nil
 }

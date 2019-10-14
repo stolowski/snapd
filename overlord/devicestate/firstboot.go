@@ -149,7 +149,6 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 					prereqTask.WaitFor(preliminarySetupPrev)
 				}
 				prebakeDone.WaitFor(preliminarySetup)
-				fmt.Printf("%s [%s] waitfor %s [%s]\n", prebakeDone.Kind(), prebakeDone.ID(), preliminarySetup.Kind(), preliminarySetup.ID())
 			} else {
 				if n != 0 {
 					ts.WaitAll(all[n-1]) // XXX config tasks
@@ -192,7 +191,6 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 
 		essInfos = append(essInfos, info)
 		essInfoToTs[info] = ts
-		fmt.Printf("ess: %s\n", info.SnapName())
 		allSnapInfos[info.SnapName()] = info
 	}
 	// now add/chain the tasksets in the right order based on essential
