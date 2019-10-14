@@ -27,6 +27,7 @@ import (
 	"github.com/snapcore/snapd/asserts"
 	"github.com/snapcore/snapd/dirs"
 	"github.com/snapcore/snapd/i18n"
+	"github.com/snapcore/snapd/osutil"
 	"github.com/snapcore/snapd/overlord/assertstate"
 	"github.com/snapcore/snapd/overlord/devicestate/internal"
 	"github.com/snapcore/snapd/overlord/snapstate"
@@ -51,6 +52,23 @@ func installSeedSnap(st *state.State, sn *seed.Snap, flags snapstate.Flags) (*st
 	}
 
 	return snapstate.InstallPath(st, sn.SideInfo, sn.Path, "", sn.Channel, flags)
+}
+
+func criticalTasks(ts *state.TaskSet) (prereq, preliminarySetup, hooks *state.Task, err error) {
+	prereq, err = ts.Edge(snapstate.PrerequisitesEdge)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
+	}
+	preliminarySetup, err = ts.Edge(snapstate.PreliminarySnapSetupDoneEdge)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
+	}
+	hooks, err = ts.Edge(snapstate.PreliminarySnapSetupHooksEdge)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
+	}
+
+	return prereq, preliminarySetup, hooks, nil
 }
 
 func trivialSeeding(st *state.State, markSeeded *state.Task) []*state.TaskSet {
@@ -102,6 +120,8 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 		return nil, err
 	}
 
+	prebakeMode := osutil.IsPrebakeMode()
+
 	essentialSeedSnaps := deviceSeed.EssentialSnaps()
 	seedSnaps, err := deviceSeed.ModeSnaps("run") // XXX mode should be passed in
 	if err != nil {
@@ -116,7 +136,23 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 	chainTs := func(all []*state.TaskSet, ts *state.TaskSet) []*state.TaskSet {
 		n := len(all)
 		if n != 0 {
-			ts.WaitAll(all[n-1])
+			if prebakeMode {
+				// prebake-barrier task needs to be inserted between preliminary setup and hook tasks
+				prereqTask, preliminarySetup, hookTask, _ := criticalTasks(ts)
+				_, preliminarySetupPrev, _, _ := criticalTasks(all[n-1])
+				// XXX: ugly, find a better way; this is to deal with configTss
+				if prereqTask != nil {
+					hookTask.WaitFor(prebakeDone)
+					if preliminarySetupPrev != nil {
+						prereqTask.WaitFor(preliminarySetupPrev)
+					}
+					prebakeDone.WaitFor(preliminarySetup)
+				} else {
+					ts.WaitAll(all[n-1])
+				}
+			} else {
+				ts.WaitAll(all[n-1])
+			}
 		}
 		return append(all, ts)
 	}
@@ -147,6 +183,20 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 			// wait for the previous configTss
 			configTss = chainTs(configTss, configTs)
 		}
+		// XXX
+		/*if prebakeMode {
+			// prebake-barrier task needs to be inserted between preliminary setup and hook tasks
+			preliminarySetup, err := ts.Edge(snapstate.PreliminarySnapSetupDoneEdge)
+			if err != nil {
+				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
+			}
+			hookTask, err := ts.Edge(snapstate.PreliminarySnapSetupHooksEdge)
+			if err != nil {
+				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
+			}
+			prebakeDone.WaitFor(preliminarySetup)
+			hookTask.WaitFor(prebakeDone)
+		}*/
 		essInfos = append(essInfos, info)
 		essInfoToTs[info] = ts
 		allSnapInfos[info.SnapName()] = info
@@ -175,6 +225,21 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 		infos = append(infos, info)
 		infoToTs[info] = ts
 		allSnapInfos[info.SnapName()] = info
+
+		// XXX
+		/*if prebakeMode {
+			// prebake-barrier task needs to be inserted between preliminary setup and hook tasks
+			preliminarySetup, err := ts.Edge(snapstate.PreliminarySnapSetupDoneEdge)
+			if err != nil {
+				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
+			}
+			hookTask, err := ts.Edge(snapstate.PreliminarySnapSetupHooksEdge)
+			if err != nil {
+				return nil, fmt.Errorf("internal error: cannot find task edge: %v", err)
+			}
+			prebakeDone.WaitFor(preliminarySetup)
+			hookTask.WaitFor(prebakeDone)
+		}*/
 	}
 
 	// validate that all snaps have bases
@@ -203,8 +268,8 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 		ts = endTs
 	}
 
-	// XXX prebakeDone needs to be somewhere else
-	prebakeDone.WaitAll(ts)
+	// XXX
+	endTs.AddTask(prebakeDone)
 	markSeeded.WaitAll(state.NewTaskSet(prebakeDone))
 	//markSeeded.WaitAll(ts)
 	endTs.AddTask(markSeeded)

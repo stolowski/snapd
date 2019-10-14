@@ -38,6 +38,7 @@ import (
 	"github.com/snapcore/snapd/i18n"
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/logger"
+	"github.com/snapcore/snapd/osutil"
 	"github.com/snapcore/snapd/overlord/auth"
 	"github.com/snapcore/snapd/overlord/configstate/config"
 	"github.com/snapcore/snapd/overlord/ifacestate/ifacerepo"
@@ -63,7 +64,10 @@ const (
 )
 
 const (
-	DownloadAndChecksDoneEdge = state.TaskSetEdge("download-and-checks-done")
+	DownloadAndChecksDoneEdge     = state.TaskSetEdge("download-and-checks-done")
+	PrerequisitesEdge             = state.TaskSetEdge("prerequisites")
+	PreliminarySnapSetupDoneEdge  = state.TaskSetEdge("preliminary-setup-done")
+	PreliminarySnapSetupHooksEdge = state.TaskSetEdge("preliminary-setup-hooks")
 )
 
 var ErrNothingToDo = errors.New("nothing to do")
@@ -192,6 +196,9 @@ func doInstall(st *state.State, snapst *SnapState, snapsup *SnapSetup, flags int
 		prev = mount
 	}
 
+	// XXX
+	prebakeMode := osutil.IsPrebakeMode()
+
 	// run refresh hooks when updating existing snap, otherwise run install hook further down.
 	runRefreshHooks := (snapst.IsInstalled() && !snapsup.Flags.Revert)
 	if runRefreshHooks {
@@ -224,7 +231,7 @@ func doInstall(st *state.State, snapst *SnapState, snapsup *SnapSetup, flags int
 	}
 
 	// copy-data (needs stopped services by unlink)
-	if !snapsup.Flags.Revert {
+	if !snapsup.Flags.Revert && !prebakeMode {
 		copyData := st.NewTask("copy-snap-data", fmt.Sprintf(i18n.G("Copy snap %q data"), snapsup.InstanceName()))
 		addTask(copyData)
 		prev = copyData
@@ -260,9 +267,10 @@ func doInstall(st *state.State, snapst *SnapState, snapsup *SnapSetup, flags int
 		prev = postRefreshHook
 	}
 
+	var installHook *state.Task
 	// only run install hook if installing the snap for the first time
 	if !snapst.IsInstalled() {
-		installHook := SetupInstallHook(st, snapsup.InstanceName())
+		installHook = SetupInstallHook(st, snapsup.InstanceName())
 		addTask(installHook)
 		prev = installHook
 	}
@@ -335,6 +343,25 @@ func doInstall(st *state.State, snapst *SnapState, snapsup *SnapSetup, flags int
 	ts.AddAll(installSet)
 	if checkAsserts != nil {
 		ts.MarkEdge(checkAsserts, DownloadAndChecksDoneEdge)
+	}
+
+	if prebakeMode {
+		if installHook == nil {
+			panic("install hook not set")
+		}
+		if prereq == nil {
+			panic("prereq task not set")
+		}
+
+		if flags&skipConfigure != 0 {
+			installSet.MarkEdge(prereq, PrerequisitesEdge)
+			installSet.MarkEdge(installHook, PreliminarySnapSetupHooksEdge)
+			installSet.MarkEdge(setupAliases, PreliminarySnapSetupDoneEdge)
+		} else {
+			ts.MarkEdge(prereq, PrerequisitesEdge)
+			ts.MarkEdge(installHook, PreliminarySnapSetupHooksEdge)
+			ts.MarkEdge(setupAliases, PreliminarySnapSetupDoneEdge)
+		}
 	}
 
 	if flags&skipConfigure != 0 {

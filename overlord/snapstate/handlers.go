@@ -1193,7 +1193,9 @@ func (m *SnapManager) doLinkSnap(t *state.Task, _ *tomb.Tomb) (err error) {
 
 	// if we just installed a core snap, request a restart
 	// so that we switch executing its snapd
-	maybeRestart(t, newInfo)
+	if !osutil.IsPrebakeMode() {
+		maybeRestart(t, newInfo)
+	}
 
 	return nil
 }
