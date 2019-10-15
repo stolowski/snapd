@@ -720,6 +720,8 @@ func (s *systemd) RemoveMountUnitFile(mountedDir string) error {
 		return nil
 	}
 
+	prebakeMode := osutil.IsPrebakeMode()
+
 	// use umount -d (cleanup loopback devices) -l (lazy) to ensure that even busy mount points
 	// can be unmounted.
 	// note that the long option --lazy is not supported on trusty.
@@ -733,16 +735,27 @@ func (s *systemd) RemoveMountUnitFile(mountedDir string) error {
 			return osutil.OutputErr(output, err)
 		}
 
-		if err := s.Stop(filepath.Base(unit), time.Duration(1*time.Second)); err != nil {
+		if !prebakeMode {
+			if err := s.Stop(filepath.Base(unit), time.Duration(1*time.Second)); err != nil {
+				return err
+			}
+		}
+	}
+
+	if !prebakeMode {
+		if err := s.Disable(filepath.Base(unit)); err != nil {
 			return err
 		}
 	}
-	if err := s.Disable(filepath.Base(unit)); err != nil {
-		return err
-	}
+
 	if err := os.Remove(unit); err != nil {
 		return err
 	}
+
+	if prebakeMode {
+		return nil
+	}
+
 	// daemon-reload to ensure that systemd actually really
 	// forgets about this mount unit
 	if err := s.daemonReloadNoLock(); err != nil {

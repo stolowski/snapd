@@ -32,6 +32,7 @@ import (
 	"github.com/snapcore/snapd/interfaces"
 	"github.com/snapcore/snapd/interfaces/hotplug"
 	"github.com/snapcore/snapd/logger"
+	"github.com/snapcore/snapd/osutil"
 	"github.com/snapcore/snapd/overlord/snapstate"
 	"github.com/snapcore/snapd/overlord/state"
 	"github.com/snapcore/snapd/snap"
@@ -1121,6 +1122,15 @@ func (m *InterfaceManager) doAutoConnect(task *state.Task, _ *tomb.Tomb) error {
 	autots, err := batchConnectTasks(st, snapsup, newconns, autoconnect)
 	if err != nil {
 		return err
+	}
+
+	// XXX: if prebake-mode is active and there are hooks, then make them wait for pre-bake-done barrier task.
+	if osutil.IsPrebakeMode() && len(autots.Tasks()) > 2 { // connect task and setup-profiles tasks are 2 tasks, other tasks are hooks
+		for _, t := range autots.Tasks() {
+			if t.Kind() == "run-hook" {
+				return fmt.Errorf("interface hooks not yet supported in pre-bake mode")
+			}
+		}
 	}
 
 	if len(autots.Tasks()) > 0 {

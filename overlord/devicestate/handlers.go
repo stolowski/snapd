@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -63,6 +64,24 @@ func (m *DeviceManager) doPrebakeDone(t *state.Task, _ *tomb.Tomb) error {
 		// do not mark this task done as this makes it racy against taskrunner tear down (the next task
 		// could start). Let this task finish after snapd restart when prebake mode is off.
 		st.RequestRestart(state.StopSnapd)
+
+		snaps, err := snapstate.All(st)
+		if err != nil {
+			return err
+		}
+
+		// unmount all snaps
+		for _, snapSt := range snaps {
+			inf, err := snapSt.CurrentInfo()
+			if err != nil {
+				return err
+			}
+			logger.Debugf("unmounting snap %s at %s", inf.InstanceName(), inf.MountDir())
+			if _, err := exec.Command("umount", "-d", "-l", inf.MountDir()).CombinedOutput(); err != nil {
+				return err
+			}
+		}
+
 		return &state.Retry{Reason: "pre-bake mode will be marked done without pre-bake mode"}
 	}
 
