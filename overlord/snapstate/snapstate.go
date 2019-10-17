@@ -231,7 +231,7 @@ func doInstall(st *state.State, snapst *SnapState, snapsup *SnapSetup, flags int
 	}
 
 	// copy-data (needs stopped services by unlink)
-	if !snapsup.Flags.Revert && !prebakeMode {
+	if !snapsup.Flags.Revert {
 		copyData := st.NewTask("copy-snap-data", fmt.Sprintf(i18n.G("Copy snap %q data"), snapsup.InstanceName()))
 		addTask(copyData)
 		prev = copyData

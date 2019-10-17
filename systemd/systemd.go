@@ -692,6 +692,12 @@ WantedBy=multi-user.target
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return "", fmt.Errorf("cannot mount %s (%s) at %s in pre-bake mode: %s; %s", what, where, fstype, err, string(out))
 		}
+
+		// XXX: we cannot call systemd, so manually enable the unit by symlinking into multi-user.target.wants
+		enableUnitPath := filepath.Join(dirs.SnapServicesDir, "multi-user.target.wants", mountUnitName)
+		if err := os.Symlink(mu, enableUnitPath); err != nil {
+			return "", fmt.Errorf("cannot enable mount unit %s: %v", mountUnitName, err)
+		}
 		return mountUnitName, nil
 	}
 
