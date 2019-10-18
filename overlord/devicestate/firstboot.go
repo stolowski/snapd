@@ -251,10 +251,9 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 	// XXX
 	if prebakeMode {
 		endTs.AddTask(prebakeDone)
-		markSeeded.WaitAll(state.NewTaskSet(prebakeDone))
-	} else {
-		markSeeded.WaitAll(ts)
 	}
+
+	markSeeded.WaitAll(ts)
 	endTs.AddTask(markSeeded)
 	tsAll = append(tsAll, endTs)
 
