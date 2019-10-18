@@ -91,7 +91,12 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 	}
 
 	// XXX
-	prebakeDone := st.NewTask("pre-bake-done", i18n.G("Image pre-bake barrier"))
+	prebakeMode := osutil.IsPrebakeMode()
+
+	var prebakeDone *state.Task
+	if prebakeMode {
+		prebakeDone = st.NewTask("pre-bake-done", i18n.G("Image pre-bake barrier"))
+	}
 	markSeeded := st.NewTask("mark-seeded", i18n.G("Mark system seeded"))
 
 	deviceSeed, err := seed.Open(dirs.SnapSeedDir)
@@ -119,8 +124,6 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 	if err != nil {
 		return nil, err
 	}
-
-	prebakeMode := osutil.IsPrebakeMode()
 
 	essentialSeedSnaps := deviceSeed.EssentialSnaps()
 	seedSnaps, err := deviceSeed.ModeSnaps("run") // XXX mode should be passed in
@@ -246,9 +249,12 @@ func populateStateFromSeedImpl(st *state.State, tm timings.Measurer) ([]*state.T
 	}
 
 	// XXX
-	endTs.AddTask(prebakeDone)
-	markSeeded.WaitAll(state.NewTaskSet(prebakeDone))
-	//markSeeded.WaitAll(ts)
+	if prebakeMode {
+		endTs.AddTask(prebakeDone)
+		markSeeded.WaitAll(state.NewTaskSet(prebakeDone))
+	} else {
+		markSeeded.WaitAll(ts)
+	}
 	endTs.AddTask(markSeeded)
 	tsAll = append(tsAll, endTs)
 

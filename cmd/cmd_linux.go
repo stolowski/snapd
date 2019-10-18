@@ -239,7 +239,8 @@ func PrebakeChroot() error {
 	}
 
 	// sanity checks of the critical mountpoints inside chroot directory
-	for _, path := range []string{"/sys/kernel/security/apparmor", "/proc/self", "/dev/mem"} {
+	for _, p := range []string{"/sys/kernel/security/apparmor", "/proc/self", "/dev/mem"} {
+		path := filepath.Join(prebakeChroot, p)
 		if exists := osutil.FileExists(path); !exists {
 			return fmt.Errorf("image-prebaking chroot directory validation error: %s doesn't exist", path)
 		}

@@ -49,10 +49,12 @@ import (
 	"github.com/snapcore/snapd/overlord/configstate/proxyconf"
 	"github.com/snapcore/snapd/overlord/snapstate"
 	"github.com/snapcore/snapd/overlord/state"
+	"github.com/snapcore/snapd/progress"
 	"github.com/snapcore/snapd/release"
 	"github.com/snapcore/snapd/snap"
 	"github.com/snapcore/snapd/snap/naming"
 	"github.com/snapcore/snapd/timings"
+	"github.com/snapcore/snapd/wrappers"
 )
 
 func (m *DeviceManager) doPrebakeDone(t *state.Task, _ *tomb.Tomb) error {
@@ -60,16 +62,12 @@ func (m *DeviceManager) doPrebakeDone(t *state.Task, _ *tomb.Tomb) error {
 	st.Lock()
 	defer st.Unlock()
 
+	snaps, err := snapstate.All(st)
+	if err != nil {
+		return err
+	}
+
 	if osutil.IsPrebakeMode() {
-		// do not mark this task done as this makes it racy against taskrunner tear down (the next task
-		// could start). Let this task finish after snapd restart when prebake mode is off.
-		st.RequestRestart(state.StopSnapd)
-
-		snaps, err := snapstate.All(st)
-		if err != nil {
-			return err
-		}
-
 		// unmount all snaps
 		for _, snapSt := range snaps {
 			inf, err := snapSt.CurrentInfo()
@@ -82,7 +80,24 @@ func (m *DeviceManager) doPrebakeDone(t *state.Task, _ *tomb.Tomb) error {
 			}
 		}
 
-		return &state.Retry{Reason: "pre-bake mode will be marked done without pre-bake mode"}
+		// do not mark this task done as this makes it racy against taskrunner tear down (the next task
+		// could start). Let this task finish after snapd restart when prebake mode is off.
+		st.RequestRestart(state.StopSnapd)
+
+		return &state.Retry{Reason: "pre-bake mode will be marked done when snapd is executed in normal mode"}
+	}
+
+	// normal snapd run after snapd restart (not in pre-bake mode anymore)
+
+	// enable all services generated as part of pre-baking, but not enabled
+	for _, snapSt := range snaps {
+		inf, err := snapSt.CurrentInfo()
+		if err != nil {
+			return err
+		}
+		if err := wrappers.EnableSnapServices(inf, progress.Null); err != nil {
+			return err
+		}
 	}
 
 	return nil
