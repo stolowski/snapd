@@ -16,36 +16,30 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package partition_test
+package recover_test
 
 import (
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"testing"
 
 	. "gopkg.in/check.v1"
+
+	"github.com/snapcore/snapd/cmd/snap-recovery/recover"
 )
 
-func TestPartition(t *testing.T) { TestingT(t) }
+func TestRecover(t *testing.T) { TestingT(t) }
 
-type partitionTestSuite struct{}
+type recoverSuite struct{}
 
-var _ = Suite(&partitionTestSuite{})
+var _ = Suite(&recoverSuite{})
 
-func makeMockGadget(gadgetRoot, gadgetContent string) error {
-	if err := os.MkdirAll(filepath.Join(gadgetRoot, "meta"), 0755); err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(filepath.Join(gadgetRoot, "meta", "gadget.yaml"), []byte(gadgetContent), 0644); err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(filepath.Join(gadgetRoot, "pc-boot.img"), nil, 0644); err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(filepath.Join(gadgetRoot, "grubx64.efi"), nil, 0644); err != nil {
-		return err
-	}
+// XXX: write a very high level integration like test here that
+// mocks the world (sfdisk,lsblk,mkfs,...)? probably silly as
+// each part inside recovery is tested and we have a spread test
 
-	return nil
+func (s *recoverSuite) TestRecoverRunError(c *C) {
+	err := recover.Run("", "", nil)
+	c.Assert(err, ErrorMatches, "cannot use empty recovery gadget root directory")
+
+	err = recover.Run("some-dir", "", nil)
+	c.Assert(err, ErrorMatches, "cannot use empty device node")
 }
