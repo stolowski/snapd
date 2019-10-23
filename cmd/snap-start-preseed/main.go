@@ -74,11 +74,13 @@ func run() error {
 		return err
 	}
 
-	if err := mountCoreOrSnapdSnap(chrootDir); err != nil {
+	cleanup, err := mountCoreOrSnapdSnap(chrootDir)
+	if err != nil {
 		return err
 	}
 
-	defer cleanup()
+	err = runSnapdInChroot(chrootDir)
 
-	return runSnapdInChroot(chrootDir)
+	cleanup()
+	return err
 }

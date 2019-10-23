@@ -51,7 +51,7 @@ func init() {
 }
 
 func main() {
-	// TODO: if re-run in prebake mode with tasks, undo/wipe everything and start from scratch?
+	// TODO: if we re-run in prebake mode, undo/wipe everything and start from scratch?
 	if osutil.IsPrebakeMode() {
 		logger.Noticef("running in prebake image mode")
 	} else {
