@@ -21,7 +21,6 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -224,33 +223,6 @@ func ExecInSnapdOrCoreSnap() {
 
 	logger.Debugf("restarting into %q", full)
 	panic(syscallExec(full, os.Args, os.Environ()))
-}
-
-// PrebakeChroot runs snapd in a chroot dir pointed by SNAPD_PREBAKE_IMAGE environment variable.
-// The chroot dir is expected to be set-up and ready to use (all critical system directories mounted).
-func PrebakeChroot() error {
-	prebakeChroot := os.Getenv("SNAPD_PREBAKE_IMAGE")
-	exists, isDir, err := osutil.DirExists(prebakeChroot)
-	if err != nil {
-		return fmt.Errorf("image-prebaking error: %v", err)
-	}
-	if !exists || !isDir {
-		return fmt.Errorf("image-prebaking chroot directory %s doesn't exist or is not a directory", prebakeChroot)
-	}
-
-	// sanity checks of the critical mountpoints inside chroot directory
-	for _, p := range []string{"/sys/kernel/security/apparmor", "/proc/self", "/dev/mem"} {
-		path := filepath.Join(prebakeChroot, p)
-		if exists := osutil.FileExists(path); !exists {
-			return fmt.Errorf("image-prebaking chroot directory validation error: %s doesn't exist", path)
-		}
-	}
-
-	if err := syscall.Chroot(prebakeChroot); err != nil {
-		return fmt.Errorf("image-prebaking chroot error: %v", err)
-	}
-
-	return nil
 }
 
 // MockOsReadlink is for use in tests

@@ -688,7 +688,7 @@ WantedBy=multi-user.target
 	// XXX
 	// Image pre-bake mode: mount the target but do not trigger systemd
 	if osutil.IsPrebakeMode() {
-		cmd := exec.Command("/usr/bin/mount", "-t", fstype, what, where, "-o", strings.Join(options, ","))
+		cmd := exec.Command("/bin/mount", "-t", fstype, what, where, "-o", strings.Join(options, ","))
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return "", fmt.Errorf("cannot mount %s (%s) at %s in pre-bake mode: %s; %s", what, where, fstype, err, string(out))
 		}
