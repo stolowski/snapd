@@ -33,23 +33,31 @@ import (
 	"github.com/snapcore/snapd/timings"
 )
 
-var mountPath = "/snapd-prebake"
-var syscallMount = syscall.Mount
+var (
+	// mountPath is where target core/snapd is going to be mounted in the target chroot
+	mountPath    = "/snapd-prebake"
+	syscallMount = syscall.Mount
+)
 
+// checkChroot does a basic sanity check of the target chroot environment, e.g. makes
+// sure critical virtual filesystems (such as proc) are mounted. This is not meant to
+// be exhaustive check, but one that prevents running the tool against a wrong directory
+// by an accident, which would lead to hard to understand errors from snapd in pre-bake
+// mode.
 func checkChroot(prebakeChroot string) error {
 	exists, isDir, err := osutil.DirExists(prebakeChroot)
 	if err != nil {
-		return fmt.Errorf("image-prebaking error: %v", err)
+		return fmt.Errorf("cannot verify target chroot directory %s: %v", prebakeChroot, err)
 	}
 	if !exists || !isDir {
-		return fmt.Errorf("image-prebaking chroot directory %s doesn't exist or is not a directory", prebakeChroot)
+		return fmt.Errorf("target chroot directory %s doesn't exist or is not a directory", prebakeChroot)
 	}
 
 	// sanity checks of the critical mountpoints inside chroot directory
 	for _, p := range []string{"/sys/kernel/security/apparmor", "/proc/self", "/dev/mem"} {
 		path := filepath.Join(prebakeChroot, p)
 		if exists := osutil.FileExists(path); !exists {
-			return fmt.Errorf("image-prebaking chroot directory validation error: %s doesn't exist", path)
+			return fmt.Errorf("target chroot directory validation error: %s doesn't exist", path)
 		}
 	}
 
@@ -58,7 +66,7 @@ func checkChroot(prebakeChroot string) error {
 
 func prepareChroot(prebakeChroot string) (func(), error) {
 	if err := syscall.Chroot(prebakeChroot); err != nil {
-		return nil, fmt.Errorf("chroot error: %v", err)
+		return nil, fmt.Errorf("cannot chroot into %s: %v", prebakeChroot, err)
 	}
 
 	rootDir := dirs.GlobalRootDir
@@ -135,7 +143,6 @@ func startPrebakeMode(prebakeChroot string) error {
 
 	// run snapd in pre-baking mode
 	cmd := exec.Command(path)
-
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "SNAPD_PREBAKE_IMAGE=1")
 	cmd.Stderr = Stderr

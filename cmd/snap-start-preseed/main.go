@@ -30,7 +30,7 @@ import (
 const (
 	shortHelp = "Pre-seed snaps in an Ubuntu chroot"
 	longHelp  = `
-	Pre-seed snaps in an Ubuntu-based chroot directory
+	Pre-seed snaps in an Ubuntu-based chroot directory which is expected to be a mounted image, ready to seed (/var/lib/snapd/seed directory set up for seeding)
 `
 )
 
@@ -39,9 +39,8 @@ var (
 	Stdout   io.Writer = os.Stdout
 	Stderr   io.Writer = os.Stderr
 
-	opts struct{}
-
-	parser *flags.Parser = flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash|flags.PassAfterNonOption)
+	opts   struct{}
+	parser = flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash|flags.PassAfterNonOption)
 )
 
 func main() {
@@ -69,7 +68,6 @@ func run() error {
 	}
 
 	chrootDir := rest[0]
-
 	if err := checkChroot(chrootDir); err != nil {
 		return err
 	}
