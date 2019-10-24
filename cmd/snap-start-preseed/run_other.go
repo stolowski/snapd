@@ -28,11 +28,11 @@ func checkChroot(prebakeChroot string) error {
 	return fmt.Errorf("image-prebaking not available for systems other than linux")
 }
 
-func mountCoreOrSnapdSnap(prebakeChroot string) (func(), error) {
-	return fmt.Errorf("image-prebaking not available for systems other than linux")
+func prepareChroot(prebakeChroot string) (func(), error) {
+	return nil, fmt.Errorf("image-prebaking not available for systems other than linux")
 }
 
-func runSnapdInChroot(rootDir string) error {
+func startPrebakeMode(rootDir string) error {
 	return fmt.Errorf("image-prebaking not available for systems other than linux")
 }
 

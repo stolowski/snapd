@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/snapcore/snapd/dirs"
 	"github.com/snapcore/snapd/osutil"
@@ -55,9 +56,13 @@ func checkChroot(prebakeChroot string) error {
 	return nil
 }
 
-func mountCoreOrSnapdSnap(prebakeChroot string) (func(), error) {
-	seedDir := filepath.Join(dirs.SnapSeedDirUnder(prebakeChroot))
+func prepareChroot(prebakeChroot string) (func(), error) {
+	if err := syscall.Chroot(prebakeChroot); err != nil {
+		return nil, fmt.Errorf("chroot error: %v", err)
+	}
 
+	rootDir := dirs.GlobalRootDir
+	seedDir := filepath.Join(dirs.SnapSeedDirUnder(rootDir))
 	seed, err := seed.Open(seedDir)
 	if err != nil {
 		return nil, err
@@ -73,54 +78,58 @@ func mountCoreOrSnapdSnap(prebakeChroot string) (func(), error) {
 	}
 
 	var coreSnapPath string
-
 	ess := seed.EssentialSnaps()
+	// TODO: handle core18, snapd snap.
 	for _, snap := range ess {
 		if snap.SnapName() == "core" {
 			coreSnapPath = snap.Path
 		}
 	}
+	if coreSnapPath == "" {
+		return nil, fmt.Errorf("core snap not found")
+	}
 
 	// create mountpoint for core/snapd
-	where := filepath.Join(prebakeChroot, mountPath)
+	where := filepath.Join(rootDir, mountPath)
 	if err := os.MkdirAll(where, 0755); err != nil {
 		return nil, err
 	}
 
 	removeMountpoint := func() {
-		err := os.Remove(where)
-		if err != nil {
-			fmt.Fprintf(Stderr, "%v", err)
+		for i := 0; i < 5; i++ {
+			err := os.Remove(where)
+			if err != nil {
+				fmt.Fprintf(Stderr, "%v", err)
+			} else {
+				return
+			}
+			time.Sleep(time.Second)
 		}
 	}
 
-	cmd := exec.Command("/bin/mount", "-t", "squashfs", coreSnapPath, where)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	cmd := exec.Command("mount", "-t", "squashfs", coreSnapPath, where)
+	if err := cmd.Run(); err != nil {
 		removeMountpoint()
-		return nil, fmt.Errorf("cannot mount %s at %s in pre-bake mode: %v; %s", coreSnapPath, where, err, string(out))
+		return nil, fmt.Errorf("cannot mount %s at %s in pre-bake mode: %v ", coreSnapPath, where, err)
 	}
 
 	unmount := func() {
-		cmd := exec.Command("/bin/umount", "-l", mountPath)
-		err := cmd.Start()
-		if err != nil {
+		fmt.Fprintf(Stdout, "umounting: %s\n", mountPath)
+		cmd := exec.Command("umount", mountPath)
+		if err := cmd.Run(); err != nil {
 			fmt.Fprintf(Stderr, "%v", err)
 		}
 	}
 
 	return func() {
-		removeMountpoint()
 		unmount()
+		removeMountpoint()
 	}, nil
 }
 
-// runSnapdInChroot runs snapd in a prebake mode in a chroot dir pointed by prebakeChroot.
-// The chroot dir is expected to be set-up and ready to use (all critical system directories mounted).
-func runSnapdInChroot(prebakeChroot string) error {
-	if err := syscall.Chroot(prebakeChroot); err != nil {
-		return fmt.Errorf("image-prebaking chroot error: %v", err)
-	}
-
+// startPrebakeMode runs snapd in a prebake mode. It assumes running in a chroot.
+// The chroot is expected to be set-up and ready to use (critical system directories mounted).
+func startPrebakeMode(prebakeChroot string) error {
 	// exec snapd relative to new chroot, e.g. /snapd-prebake/usr/lib/snapd/snapd
 	path := filepath.Join(mountPath, "/usr/lib/snapd/snapd")
 
@@ -132,7 +141,7 @@ func runSnapdInChroot(prebakeChroot string) error {
 	cmd.Stderr = Stderr
 	cmd.Stdout = Stdout
 
-	fmt.Printf("starting pre-baking mode: %s, chroot is %s\n", path, prebakeChroot)
+	fmt.Printf("starting pre-baking mode: %s\n", prebakeChroot)
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("image-prebaking error: %v\n", err)
