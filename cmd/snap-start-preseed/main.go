@@ -39,26 +39,30 @@ var (
 	Stdout   io.Writer = os.Stdout
 	Stderr   io.Writer = os.Stderr
 
-	opts   struct{}
-	parser = flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash|flags.PassAfterNonOption)
+	opts struct{}
 )
 
-func main() {
+func Parser() *flags.Parser {
+	parser := flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash|flags.PassAfterNonOption)
 	parser.ShortDescription = shortHelp
 	parser.LongDescription = longHelp
+	return parser
+}
 
-	if err := run(); err != nil {
+func main() {
+	parser := Parser()
+	if err := run(parser, os.Args[1:]); err != nil {
 		fmt.Fprintf(Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(parser *flags.Parser, args []string) error {
 	if osGetuid() != 0 {
 		return fmt.Errorf("must be run as root")
 	}
 
-	rest, err := parser.ParseArgs(os.Args[1:])
+	rest, err := parser.ParseArgs(args)
 	if err != nil {
 		return err
 	}

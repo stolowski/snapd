@@ -35,8 +35,9 @@ import (
 
 var (
 	// mountPath is where target core/snapd is going to be mounted in the target chroot
-	mountPath    = "/snapd-prebake"
-	syscallMount = syscall.Mount
+	mountPath     = "/snapd-prebake"
+	syscallMount  = syscall.Mount
+	syscallChroot = syscall.Chroot
 )
 
 // checkChroot does a basic sanity check of the target chroot environment, e.g. makes
@@ -64,25 +65,20 @@ func checkChroot(prebakeChroot string) error {
 	return nil
 }
 
-func prepareChroot(prebakeChroot string) (func(), error) {
-	if err := syscall.Chroot(prebakeChroot); err != nil {
-		return nil, fmt.Errorf("cannot chroot into %s: %v", prebakeChroot, err)
-	}
-
-	rootDir := dirs.GlobalRootDir
+var systemSnapFromSeeds = func(rootDir string) (string, error) {
 	seedDir := filepath.Join(dirs.SnapSeedDirUnder(rootDir))
 	seed, err := seed.Open(seedDir)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if err := seed.LoadAssertions(nil, nil); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	tm := timings.New(nil)
 	if err := seed.LoadMeta(tm); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	var coreSnapPath string
@@ -91,10 +87,26 @@ func prepareChroot(prebakeChroot string) (func(), error) {
 	for _, snap := range ess {
 		if snap.SnapName() == "core" {
 			coreSnapPath = snap.Path
+			break
 		}
 	}
 	if coreSnapPath == "" {
-		return nil, fmt.Errorf("core snap not found")
+		return "", fmt.Errorf("core snap not found")
+	}
+
+	return coreSnapPath, nil
+}
+
+func prepareChroot(prebakeChroot string) (func(), error) {
+	if err := syscallChroot(prebakeChroot); err != nil {
+		return nil, fmt.Errorf("cannot chroot into %s: %v", prebakeChroot, err)
+	}
+
+	// GlobalRootDir is now relative to chroot env
+	rootDir := dirs.GlobalRootDir
+	coreSnapPath, err := systemSnapFromSeeds(rootDir)
+	if err != nil {
+		return nil, err
 	}
 
 	// create mountpoint for core/snapd
@@ -121,8 +133,10 @@ func prepareChroot(prebakeChroot string) (func(), error) {
 		return nil, fmt.Errorf("cannot mount %s at %s in pre-bake mode: %v ", coreSnapPath, where, err)
 	}
 
+	// TODO: check snapd version
+
 	unmount := func() {
-		fmt.Fprintf(Stdout, "umounting: %s\n", mountPath)
+		fmt.Fprintf(Stdout, "unmounting: %s\n", mountPath)
 		cmd := exec.Command("umount", mountPath)
 		if err := cmd.Run(); err != nil {
 			fmt.Fprintf(Stderr, "%v", err)
