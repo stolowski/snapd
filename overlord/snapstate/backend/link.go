@@ -134,8 +134,8 @@ func (b Backend) LinkSnap(info *snap.Info, dev boot.Device, prevDisabledSvcs []s
 	return nil
 }
 
-func (b Backend) StartServices(apps []*snap.AppInfo, meter progress.Meter, tm timings.Measurer) error {
-	return wrappers.StartServices(apps, meter, tm)
+func (b Backend) StartServices(apps []*snap.AppInfo, disabledSvcs []string, enableBeforeStart bool, meter progress.Meter, tm timings.Measurer) error {
+	return wrappers.StartServices(apps, disabledSvcs, enableBeforeStart, meter, tm)
 }
 
 func (b Backend) StopServices(apps []*snap.AppInfo, reason snap.ServiceStopReason, meter progress.Meter, tm timings.Measurer) error {

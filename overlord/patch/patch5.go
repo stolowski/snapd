@@ -76,7 +76,8 @@ func patch5(st *state.State) error {
 			return err
 		}
 
-		err = wrappers.StartServices(svcs, log, tm)
+		enableBeforeStart := true
+		err = wrappers.StartServices(svcs, nil, enableBeforeStart, log, tm)
 		if err != nil {
 			return err
 		}
