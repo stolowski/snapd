@@ -1,6 +1,8 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
+// +build !linux
+
 /*
- * Copyright (C) 2016-2017 Canonical Ltd
+ * Copyright (C) 2019 Canonical Ltd
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -16,29 +18,22 @@
  *
  */
 
-package devicestate
+package main
 
 import (
-	"time"
-
-	"gopkg.in/tomb.v2"
-
-	"github.com/snapcore/snapd/overlord/state"
+	"fmt"
 )
 
-func (m *DeviceManager) doMarkSeeded(t *state.Task, _ *tomb.Tomb) error {
-	st := t.State()
-	st.Lock()
-	defer st.Unlock()
-
-	// TODO:UC20: update "modeenv" and remove "recovery_system" from
-	// it because this information is only needed for the initial
-	// seeding.
-
-	st.Set("seed-time", time.Now())
-	st.Set("seeded", true)
-	// make sure we setup a fallback model/consider the next phase
-	// (registration) timely
-	st.EnsureBefore(0)
-	return nil
+func checkChroot(preseedChroot string) error {
+	return fmt.Errorf("preseed mode not available for systems other than linux")
 }
+
+func prepareChroot(preseedChroot string) (func(), error) {
+	return nil, fmt.Errorf("preseed mode not available for systems other than linux")
+}
+
+func runPreseedMode(rootDir string) error {
+	return fmt.Errorf("preseed mode not available for systems other than linux")
+}
+
+func cleanup() {}
