@@ -126,6 +126,41 @@ func StartServices(apps []*snap.AppInfo, disabledSvcs []string, enableBeforeStar
 			continue
 		}
 
+		if len(app.Sockets) == 0 && app.Timer == nil {
+			svcName := app.ServiceName()
+			if !strutil.ListContains(disabledSvcs, app.Name) {
+				if enableBeforeStart {
+					if err = sysd.Enable(svcName); err != nil {
+						return err
+
+					}
+				}
+				services = append(services, svcName)
+			}
+		}
+
+		defer func(app *snap.AppInfo) {
+			if err == nil {
+				return
+			}
+
+			if e := stopService(sysd, app, inter); e != nil {
+				inter.Notify(fmt.Sprintf("While trying to stop previously started service %q: %v", app.ServiceName(), e))
+			}
+			for _, socket := range app.Sockets {
+				socketService := filepath.Base(socket.File())
+				if e := sysd.Disable(socketService); e != nil {
+					inter.Notify(fmt.Sprintf("While trying to disable previously enabled socket service %q: %v", socketService, e))
+				}
+			}
+			if app.Timer != nil {
+				timerService := filepath.Base(app.Timer.File())
+				if e := sysd.Disable(timerService); e != nil {
+					inter.Notify(fmt.Sprintf("While trying to disable previously enabled timer service %q: %v", timerService, e))
+				}
+			}
+		}(app)
+
 		for _, socket := range app.Sockets {
 			socketService := filepath.Base(socket.File())
 			// enable the socket
@@ -143,8 +178,6 @@ func StartServices(apps []*snap.AppInfo, disabledSvcs []string, enableBeforeStar
 
 		if app.Timer != nil {
 			timerService := filepath.Base(app.Timer.File())
-			// XXX
-			logger.Noticef("timer service: %s", timerService)
 			// enable the timer
 			if err = sysd.Enable(timerService); err != nil {
 				logger.Noticef("timer service: %s", err)
@@ -157,43 +190,6 @@ func StartServices(apps []*snap.AppInfo, disabledSvcs []string, enableBeforeStar
 			if err != nil {
 				return err
 			}
-		}
-
-		if len(app.Sockets) == 0 && app.Timer == nil {
-			if strutil.ListContains(disabledSvcs, app.Name) {
-				// service is disabled, nothing to do
-				continue
-			}
-			svcName := app.ServiceName()
-			if enableBeforeStart {
-				if err = sysd.Enable(svcName); err != nil {
-					return err
-
-				}
-			}
-			services = append(services, svcName)
-
-			defer func(app *snap.AppInfo) {
-				if err == nil {
-					return
-				}
-
-				if e := stopService(sysd, app, inter); e != nil {
-					inter.Notify(fmt.Sprintf("While trying to stop previously started service %q: %v", app.ServiceName(), e))
-				}
-				for _, socket := range app.Sockets {
-					socketService := filepath.Base(socket.File())
-					if e := sysd.Disable(socketService); e != nil {
-						inter.Notify(fmt.Sprintf("While trying to disable previously enabled socket service %q: %v", socketService, e))
-					}
-				}
-				if app.Timer != nil {
-					timerService := filepath.Base(app.Timer.File())
-					if e := sysd.Disable(timerService); e != nil {
-						inter.Notify(fmt.Sprintf("While trying to disable previously enabled timer service %q: %v", timerService, e))
-					}
-				}
-			}(app)
 		}
 	}
 
