@@ -889,25 +889,11 @@ func (m *SnapManager) undoUnlinkCurrentSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	// get the services which LinkSnap should disable when generating wrappers,
-	// as well as the services which are not present in this revision, but were
-	// present and disabled in a previous one and as such should be kept inside
-	// snapst for persistent storage.
-	svcsToSave, _, err := missingDisabledServices(snapst.LastActiveDisabledServices, oldInfo)
-	if err != nil {
-		return err
-	}
-
 	snapst.Active = true
 	err = m.backend.LinkSnap(oldInfo, deviceCtx, nil, perfTimings)
 	if err != nil {
 		return err
 	}
-
-	// re-save the missing services so when we unlink this revision and go to a
-	// different revision with potentially different service names, the
-	// currently missing service names will be re-disabled if they exist later
-	snapst.LastActiveDisabledServices = svcsToSave
 
 	// mark as active again
 	Set(st, snapsup.InstanceName(), snapst)
@@ -1525,30 +1511,6 @@ func (m *SnapManager) undoLinkSnap(t *state.Task, _ *tomb.Tomb) error {
 		if err = config.RestoreRevisionConfig(st, snapsup.InstanceName(), oldCurrent); err != nil {
 			return err
 		}
-
-		// unlock state while we talk to systemd
-		st.Unlock()
-		defer st.Lock()
-
-		// get the currently disabled services and add them to
-		// snapst.LastActiveDisabledServices because if we completed a successful
-		// doLinkSnap (hence we are in the undo handler), then we already disabled
-		// the services and deleted currently existing services from the state
-		// during doLinkSnap, but now we will need that information again when we go
-		// to link the old version to prevent accidental enabling of disabled
-		// services on a failed revert/refresh
-		disabledServices, err := m.queryDisabledServices(newInfo, NewTaskProgressAdapterUnlocked(t))
-		if err != nil {
-			return err
-		}
-
-		st.Lock()
-		defer st.Unlock()
-
-		snapst.LastActiveDisabledServices = append(
-			snapst.LastActiveDisabledServices,
-			disabledServices...,
-		)
 	} else {
 		// in the case of an install we need to clear any config
 		err = config.DeleteSnapConfig(st, snapsup.InstanceName())
@@ -1677,10 +1639,9 @@ func (m *SnapManager) startSnapServices(t *state.Task, _ *tomb.Tomb) error {
 	// commit the missing services to state so when we unlink this revision and
 	// go to a different revision with potentially different service names, the
 	// currently missing service names will be re-disabled if they exist later
+	t.Set("old-last-active-disabled-services", snapst.LastActiveDisabledServices)
 	snapst.LastActiveDisabledServices = svcsToSave
 	Set(st, snapsup.InstanceName(), snapst)
-
-	t.Set("old-last-active-disabled-services", svcsToSave)
 
 	svcs := currentInfo.Services()
 	if len(svcs) == 0 {
@@ -1801,6 +1762,10 @@ func (m *SnapManager) stopSnapServices(t *state.Task, _ *tomb.Tomb) error {
 	st.Lock()
 	defer st.Unlock()
 
+	// for undo
+	t.Set("old-last-active-disabled-services", snapst.LastActiveDisabledServices)
+	t.Set("last-active-disabled", disabledServices)
+
 	// add to the disabled services list in snapst services which were disabled
 	// when stop-snap-services ran, for usage across changes like in reverting
 	// and enabling after being disabled.
@@ -1848,11 +1813,26 @@ func (m *SnapManager) undoStopSnapServices(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
+	var lastActiveDisabled []string
+	if err := t.Get("old-last-active-disabled-services", &lastActiveDisabled); err != nil && err != state.ErrNoState {
+		return err
+	}
+	snapst.LastActiveDisabledServices = lastActiveDisabled
+	Set(st, snapsup.InstanceName(), snapst)
+
+	var disabledServices []string
+	if err := t.Get("last-active-disabled", &disabledServices); err != nil && err != state.ErrNoState {
+		return err
+	}
+
 	st.Unlock()
 	enableBeforeStart := true
-	err = m.backend.StartServices(startupOrdered, snapsup.LastActiveDisabledServices, enableBeforeStart, progress.Null, perfTimings)
-	st.Lock()
+	err = m.backend.StartServices(startupOrdered, disabledServices, enableBeforeStart, progress.Null, perfTimings)
+	if err != nil {
+		return err
+	}
 
+	st.Lock()
 	return nil
 }
 
