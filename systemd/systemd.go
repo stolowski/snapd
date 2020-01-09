@@ -36,7 +36,6 @@ import (
 	_ "github.com/snapcore/squashfuse"
 
 	"github.com/snapcore/snapd/dirs"
-	"github.com/snapcore/snapd/logger" //XXX
 	"github.com/snapcore/snapd/osutil"
 	"github.com/snapcore/snapd/osutil/squashfs"
 	"github.com/snapcore/snapd/sandbox/selinux"
@@ -347,9 +346,6 @@ func (s *systemd) getUnitStatus(properties []string, unitNames []string) ([]*Uni
 	if err != nil {
 		return nil, err
 	}
-
-	// XXX
-	logger.Noticef("unit status: %q", unitNames)
 
 	sts := make([]*UnitStatus, 0, len(unitNames))
 	cur := &UnitStatus{}

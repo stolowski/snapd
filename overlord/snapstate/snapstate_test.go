@@ -3949,11 +3949,11 @@ func (s *snapmgrTestSuite) TestEnableSnapDisabledServicesPassedAroundHappy(c *C)
 	// check the ops that will be provided disabledServices
 	svcStateOp := s.fakeBackend.ops.First("current-snap-service-states")
 	c.Assert(svcStateOp, Not(IsNil))
-	c.Assert(svcStateOp.disabledServices, DeepEquals, []string{"svc1", "svc2"})
+	c.Check(svcStateOp.disabledServices, DeepEquals, []string{"svc1", "svc2"})
 
 	linkStateOp := s.fakeBackend.ops.First("link-snap")
 	c.Assert(linkStateOp, Not(IsNil))
-	c.Assert(linkStateOp.disabledServices, DeepEquals, []string{"svc1", "svc2"})
+	c.Check(linkStateOp.disabledServices, DeepEquals, []string{"svc1", "svc2"})
 }
 
 func (s *snapmgrTestSuite) TestEnableSnapDisabledServicesNotSaved(c *C) {

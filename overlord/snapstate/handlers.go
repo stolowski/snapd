@@ -900,7 +900,6 @@ func (m *SnapManager) undoUnlinkCurrentSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	// XXX
 	// get the services which LinkSnap should disable when generating wrappers,
 	// as well as the services which are not present in this revision, but were
 	// present and disabled in a previous one and as such should be kept inside
@@ -1187,17 +1186,6 @@ func (m *SnapManager) doLinkSnap(t *state.Task, _ *tomb.Tomb) (err error) {
 
 	pb := NewTaskProgressAdapterLocked(t)
 
-	// get the services which LinkSnap should disable when generating wrappers,
-	// as well as the services which are not present in this revision, but were
-	// present and disabled in a previous one and as such should be kept inside
-	// snapst for persistent storage
-	//svcsToSave, _, err := missingDisabledServices(snapst.LastActiveDisabledServices, newInfo)
-	// XXXX tu jest chyba problem przy snap enable
-	//if err != nil {
-	//	return err
-	//}
-
-	//err = m.backend.LinkSnap(newInfo, deviceCtx, svcsToDisable, perfTimings)
 	err = m.backend.LinkSnap(newInfo, deviceCtx, nil, perfTimings)
 	// defer a cleanup helper which will unlink the snap if anything fails after
 	// this point
@@ -1215,12 +1203,6 @@ func (m *SnapManager) doLinkSnap(t *state.Task, _ *tomb.Tomb) (err error) {
 	if err != nil {
 		return err
 	}
-
-	// XXX
-	// commit the missing services to state so when we unlink this revision and
-	// go to a different revision with potentially different service names, the
-	// currently missing service names will be re-disabled if they exist later
-	//snapst.LastActiveDisabledServices = svcsToSave
 
 	// Restore configuration of the target revision (if available) on revert
 	if isInstalled {
@@ -1248,8 +1230,6 @@ func (m *SnapManager) doLinkSnap(t *state.Task, _ *tomb.Tomb) (err error) {
 	t.Set("old-devmode", oldDevMode)
 	t.Set("old-jailmode", oldJailMode)
 	t.Set("old-classic", oldClassic)
-	// XXX
-	//t.Set("old-last-active-disabled-services", svcsToSave)
 	t.Set("old-ignore-validation", oldIgnoreValidation)
 	t.Set("old-channel", oldChannel)
 	t.Set("old-current", oldCurrent)
@@ -1498,12 +1478,6 @@ func (m *SnapManager) undoLinkSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	// XXX
-	//var oldLastActiveDisabledServices []string
-	//if err := t.Get("old-last-active-disabled-services", &oldLastActiveDisabledServices); err != nil && err != state.ErrNoState {
-	//	return err
-	//}
-
 	if len(snapst.Sequence) == 1 {
 		// XXX: shouldn't these two just log and carry on? this is an undo handler...
 		timings.Run(perfTimings, "discard-snap-namespace", fmt.Sprintf("discard the namespace of snap %q", snapsup.InstanceName()), func(tm timings.Measurer) {
@@ -1547,8 +1521,6 @@ func (m *SnapManager) undoLinkSnap(t *state.Task, _ *tomb.Tomb) error {
 	snapst.Classic = oldClassic
 	snapst.RefreshInhibitedTime = oldRefreshInhibitedTime
 	snapst.CohortKey = oldCohortKey
-	// XXX
-	//snapst.LastActiveDisabledServices = oldLastActiveDisabledServices
 
 	newInfo, err := readInfo(snapsup.InstanceName(), snapsup.SideInfo, 0)
 	if err != nil {
@@ -1704,8 +1676,7 @@ func (m *SnapManager) startSnapServices(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	// XXX
-	// get the services which LinkSnap should disable when generating wrappers,
+	// get the services which should be disabled (not started),
 	// as well as the services which are not present in this revision, but were
 	// present and disabled in a previous one and as such should be kept inside
 	// snapst for persistent storage
@@ -1714,18 +1685,15 @@ func (m *SnapManager) startSnapServices(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	// XXX
 	// commit the missing services to state so when we unlink this revision and
 	// go to a different revision with potentially different service names, the
 	// currently missing service names will be re-disabled if they exist later
 	snapst.LastActiveDisabledServices = svcsToSave
 	Set(st, snapsup.InstanceName(), snapst)
 
-	// XXX
 	t.Set("old-last-active-disabled-services", svcsToSave)
 
 	svcs := currentInfo.Services()
-	t.Logf("start-snap-services: save=%q, disable=%q, total=%d", svcsToSave, svcsToDisable, len(svcs))
 	if len(svcs) == 0 {
 		return nil
 	}
@@ -1763,7 +1731,6 @@ func (m *SnapManager) undoStartSnapServices(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	// XXX
 	var oldLastActiveDisabledServices []string
 	if err := t.Get("old-last-active-disabled-services", &oldLastActiveDisabledServices); err != nil && err != state.ErrNoState {
 		return err
@@ -1847,7 +1814,6 @@ func (m *SnapManager) stopSnapServices(t *state.Task, _ *tomb.Tomb) error {
 
 	// finally commit the disabled services to snapsetup
 	snapsup.LastActiveDisabledServices = disabledServices
-	t.Logf("disabled=%q", disabledServices)
 
 	err = SetTaskSnapSetup(t, snapsup)
 	if err != nil {
