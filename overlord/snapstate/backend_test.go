@@ -812,11 +812,6 @@ func (f *fakeSnappyBackend) LinkSnap(info *snap.Info, dev boot.Device, disabledS
 		path: info.MountDir(),
 	}
 
-	// only add the services to the op if there's something to add
-	if len(disabledSvcs) != 0 {
-		op.disabledServices = disabledSvcs
-	}
-
 	if info.MountDir() == f.linkSnapFailTrigger {
 		op.op = "link-snap.failed"
 		f.ops = append(f.ops, op)
@@ -842,11 +837,16 @@ func (f *fakeSnappyBackend) StartServices(svcs []*snap.AppInfo, disabledSvcs []s
 	for _, svc := range svcs {
 		services = append(services, svc.Name)
 	}
-	f.appendOp(&fakeOp{
+	op := fakeOp{
 		op:       "start-snap-services",
 		path:     svcSnapMountDir(svcs),
 		services: services,
-	})
+	}
+	// only add the services to the op if there's something to add
+	if len(disabledSvcs) != 0 {
+		op.disabledServices = disabledSvcs
+	}
+	f.appendOp(&op)
 	return nil
 }
 

@@ -3781,16 +3781,14 @@ func (s *snapmgrTestSuite) TestStopSnapServicesSavesSnapSetupLastActiveDisabledS
 	c.Assert(chg.Err(), IsNil)
 	c.Assert(chg.IsReady(), Equals, true)
 
-	// get the snap setup from the task from state
-	endT := s.state.Task(t1.ID())
-	finalsnapsup := &snapstate.SnapSetup{}
-	endT.Get("snap-setup", finalsnapsup)
+	// get the snap state
+	var snapst snapstate.SnapState
+	c.Assert(snapstate.Get(s.state, "services-snap", &snapst), IsNil)
 
 	// make sure that the disabled services in this snap's state is what we
 	// provided
-	sort.Strings(finalsnapsup.LastActiveDisabledServices)
-	c.Assert(finalsnapsup.LastActiveDisabledServices, DeepEquals, []string{"svc1", "svc2"})
-
+	sort.Strings(snapst.LastActiveDisabledServices)
+	c.Assert(snapst.LastActiveDisabledServices, DeepEquals, []string{"svc1", "svc2"})
 }
 
 func (s *snapmgrTestSuite) TestStopSnapServicesFirstSavesSnapSetupLastActiveDisabledServices(c *C) {
@@ -3798,7 +3796,7 @@ func (s *snapmgrTestSuite) TestStopSnapServicesFirstSavesSnapSetupLastActiveDisa
 	defer s.state.Unlock()
 
 	prevCurrentlyDisabled := s.fakeBackend.servicesCurrentlyDisabled
-	s.fakeBackend.servicesCurrentlyDisabled = []string{"svc1", "svc2"}
+	s.fakeBackend.servicesCurrentlyDisabled = []string{"svc1"}
 
 	// reset the services to what they were before after the test is done
 	defer func() {
@@ -3809,8 +3807,9 @@ func (s *snapmgrTestSuite) TestStopSnapServicesFirstSavesSnapSetupLastActiveDisa
 		Sequence: []*snap.SideInfo{
 			{RealName: "services-snap", Revision: snap.R(11)},
 		},
-		Current: snap.R(11),
-		Active:  true,
+		Current:                    snap.R(11),
+		Active:                     true,
+		LastActiveDisabledServices: []string{"svc2"},
 	})
 
 	snapsup := &snapstate.SnapSetup{
@@ -3835,15 +3834,14 @@ func (s *snapmgrTestSuite) TestStopSnapServicesFirstSavesSnapSetupLastActiveDisa
 	c.Assert(chg.Err(), IsNil)
 	c.Assert(chg.IsReady(), Equals, true)
 
-	// get the snap setup from the task from state
-	endT := s.state.Task(t.ID())
-	finalsnapsup := &snapstate.SnapSetup{}
-	endT.Get("snap-setup", finalsnapsup)
+	// get the snap state
+	var snapst snapstate.SnapState
+	c.Assert(snapstate.Get(s.state, "services-snap", &snapst), IsNil)
 
 	// make sure that the disabled services in this snap's state is what we
 	// provided
-	sort.Strings(finalsnapsup.LastActiveDisabledServices)
-	c.Assert(finalsnapsup.LastActiveDisabledServices, DeepEquals, []string{"svc1", "svc2"})
+	sort.Strings(snapst.LastActiveDisabledServices)
+	c.Assert(snapst.LastActiveDisabledServices, DeepEquals, []string{"svc1", "svc2"})
 }
 
 func (s *snapmgrTestSuite) TestDisableSnapDisabledServicesSaved(c *C) {
@@ -3951,9 +3949,9 @@ func (s *snapmgrTestSuite) TestEnableSnapDisabledServicesPassedAroundHappy(c *C)
 	c.Assert(svcStateOp, Not(IsNil))
 	c.Check(svcStateOp.disabledServices, DeepEquals, []string{"svc1", "svc2"})
 
-	linkStateOp := s.fakeBackend.ops.First("link-snap")
-	c.Assert(linkStateOp, Not(IsNil))
-	c.Check(linkStateOp.disabledServices, DeepEquals, []string{"svc1", "svc2"})
+	startServicesOp := s.fakeBackend.ops.First("start-snap-services")
+	c.Assert(startServicesOp, Not(IsNil))
+	c.Check(startServicesOp.disabledServices, DeepEquals, []string{"svc1", "svc2"})
 }
 
 func (s *snapmgrTestSuite) TestEnableSnapDisabledServicesNotSaved(c *C) {
@@ -5872,9 +5870,6 @@ func (s *snapmgrTestSuite) TestUpdateTotalUndoRunThrough(c *C) {
 		{
 			op:   "remove-snap-aliases",
 			name: "some-snap",
-		},
-		{
-			op: "current-snap-service-states",
 		},
 		{
 			op:   "unlink-snap",
@@ -9366,9 +9361,6 @@ func (s *snapmgrTestSuite) TestRevertTotalUndoRunThrough(c *C) {
 		{
 			op:   "remove-snap-aliases",
 			name: "some-snap",
-		},
-		{
-			op: "current-snap-service-states",
 		},
 		{
 			op:   "unlink-snap",
