@@ -834,17 +834,6 @@ func (m *SnapManager) doUnlinkCurrentSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	// add to the disabled services list in snapst services which were disabled
-	// when stop-snap-services ran, for usage across changes like in reverting
-	// and enabling after being disabled.
-	// we keep what's already in the list in snapst because that list is
-	// services which were previously present in the snap and disabled, but are
-	// no longer present.
-	snapst.LastActiveDisabledServices = append(
-		snapst.LastActiveDisabledServices,
-		snapsup.LastActiveDisabledServices...,
-	)
-
 	tr := config.NewTransaction(st)
 	experimentalRefreshAppAwareness, err := config.GetFeatureFlag(tr, features.RefreshAppAwareness)
 	if err != nil && !config.IsNoOption(err) {
@@ -1812,8 +1801,17 @@ func (m *SnapManager) stopSnapServices(t *state.Task, _ *tomb.Tomb) error {
 	st.Lock()
 	defer st.Unlock()
 
-	// finally commit the disabled services to snapsetup
-	snapsup.LastActiveDisabledServices = disabledServices
+	// add to the disabled services list in snapst services which were disabled
+	// when stop-snap-services ran, for usage across changes like in reverting
+	// and enabling after being disabled.
+	// we keep what's already in the list in snapst because that list is
+	// services which were previously present in the snap and disabled, but are
+	// no longer present.
+	snapst.LastActiveDisabledServices = append(
+		snapst.LastActiveDisabledServices,
+		disabledServices...,
+	)
+	Set(st, snapsup.InstanceName(), snapst)
 
 	err = SetTaskSnapSetup(t, snapsup)
 	if err != nil {
@@ -1879,17 +1877,6 @@ func (m *SnapManager) doUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 	if err != nil {
 		return err
 	}
-
-	// add to the disabled services list in snapst services which were disabled
-	// when stop-snap-services ran, for usage across changes like in reverting
-	// and enabling after being disabled.
-	// we keep what's already in the list in snapst because that list is
-	// services which were previously present in the snap and disabled, but are
-	// no longer present.
-	snapst.LastActiveDisabledServices = append(
-		snapst.LastActiveDisabledServices,
-		snapsup.LastActiveDisabledServices...,
-	)
 
 	// mark as inactive
 	snapst.Active = false
