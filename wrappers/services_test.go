@@ -1289,8 +1289,9 @@ apps:
   command: bin/hello
   daemon: simple
 `
-
-	//svc3Name := "snap.hello-snap.svc3.service"
+	svc1Socket := "snap.hello-snap.svc1.sock1.socket"
+	svc2Timer := "snap.hello-snap.svc2.timer"
+	svc3Name := "snap.hello-snap.svc3.service"
 
 	info := snaptest.MockSnap(c, snapYaml, &snap.SideInfo{Revision: snap.R(12)})
 
@@ -1302,18 +1303,20 @@ apps:
 	})
 	s.sysdLog = nil
 
-	// XXX: check service files
-
 	apps := []*snap.AppInfo{info.Apps["svc1"], info.Apps["svc2"], info.Apps["svc3"]}
 	enable := true
 	err = wrappers.StartServices(apps, nil, enable, progress.Null, s.perfTimings)
 	c.Assert(err, IsNil)
 
-	/*c.Assert(s.sysdLog, HasLen, 2, Commentf("len: %v calls: %v", len(s.sysdLog), s.sysdLog))
+	c.Assert(s.sysdLog, HasLen, 6, Commentf("len: %v calls: %v", len(s.sysdLog), s.sysdLog))
 	c.Check(s.sysdLog, DeepEquals, [][]string{
-		// only svc3 gets started during boot
+		{"--root", dirs.GlobalRootDir, "enable", svc1Socket},
+		{"start", svc1Socket},
+		{"--root", dirs.GlobalRootDir, "enable", svc2Timer},
+		{"start", svc2Timer},
 		{"--root", dirs.GlobalRootDir, "enable", svc3Name},
-	}, Commentf("calls: %v", s.sysdLog))*/
+		{"start", svc3Name},
+	}, Commentf("calls: %v", s.sysdLog))
 }
 
 func (s *servicesTestSuite) TestServiceRestartDelay(c *C) {
