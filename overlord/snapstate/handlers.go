@@ -1704,10 +1704,8 @@ func (m *SnapManager) undoStartSnapServices(t *state.Task, _ *tomb.Tomb) error {
 		return nil
 	}
 
+	// XXX: stop reason not set on start task, should we have a new reason for undo?
 	var stopReason snap.ServiceStopReason
-	if err := t.Get("stop-reason", &stopReason); err != nil && err != state.ErrNoState {
-		return err
-	}
 
 	// stop the services
 	err = m.backend.StopServices(svcs, stopReason, progress.Null, perfTimings)
@@ -1775,7 +1773,8 @@ func (m *SnapManager) stopSnapServices(t *state.Task, _ *tomb.Tomb) error {
 
 	// for undo
 	t.Set("old-last-active-disabled-services", snapst.LastActiveDisabledServices)
-	t.Set("last-active-disabled", disabledServices)
+	// undo could queryDisabledServices, but this avoids it
+	t.Set("disabled-services", disabledServices)
 
 	// add to the disabled services list in snapst services which were disabled
 	// for usage across changes like in reverting and enabling after being
@@ -1832,7 +1831,7 @@ func (m *SnapManager) undoStopSnapServices(t *state.Task, _ *tomb.Tomb) error {
 	Set(st, snapsup.InstanceName(), snapst)
 
 	var disabledServices []string
-	if err := t.Get("last-active-disabled", &disabledServices); err != nil && err != state.ErrNoState {
+	if err := t.Get("disabled-services", &disabledServices); err != nil && err != state.ErrNoState {
 		return err
 	}
 
