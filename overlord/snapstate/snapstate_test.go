@@ -15729,3 +15729,66 @@ func (s *snapmgrTestSuite) TestForSnapSetupResetsFlags(c *C) {
 		RequireTypeBase:  false,
 	})
 }
+
+func (s *snapmgrTestSuite) runSnapStartServicesWithDisabledServices(c *C, disabled ...string) {
+	const packageHello = `name: hello-snap
+version: 1
+apps:
+ hello:
+   command: bin/hello
+ svc1:
+  command: bin/hello
+  daemon: forking
+`
+	s.state.Lock()
+	defer s.state.Unlock()
+
+	si := &snap.SideInfo{RealName: "hello-snap", SnapID: "hello-snap-id", Revision: snap.R(1)}
+	snaptest.MockSnap(c, packageHello, si)
+
+	snapstate.Set(s.state, "hello-snap", &snapstate.SnapState{
+		Active:                     true,
+		Sequence:                   []*snap.SideInfo{si},
+		Current:                    si.Revision,
+		SnapType:                   "app",
+		LastActiveDisabledServices: disabled,
+	})
+
+	// using MockSnap, we want to read the bits on disk
+	snapstate.MockSnapReadInfo(snap.ReadInfo)
+
+	chg := s.state.NewChange("services..", "")
+	t := s.state.NewTask("start-snap-services", "")
+	sup := &snapstate.SnapSetup{SideInfo: si}
+	t.Set("snap-setup", sup)
+	chg.AddTask(t)
+
+	s.state.Unlock()
+	defer s.se.Stop()
+	s.settle(c)
+	s.state.Lock()
+
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+}
+
+func (s *snapmgrTestSuite) TestSnapServicesWithDisabledServicesNowApp(c *C) {
+	// mock the logger
+	buf, loggerRestore := logger.MockLogger()
+	defer loggerRestore()
+
+	s.runSnapStartServicesWithDisabledServices(c, "hello")
+
+	// check the log for the notice
+	c.Assert(buf.String(), Matches, `.*previously disabled service hello is now an app and not a service\n.*`)
+}
+
+func (s *snapmgrTestSuite) TestSnapServicesWithDisabledServicesMissing(c *C) {
+	// mock the logger
+	buf, loggerRestore := logger.MockLogger()
+	defer loggerRestore()
+
+	s.runSnapStartServicesWithDisabledServices(c, "old-disabled-svc")
+
+	// check the log for the notice
+	c.Assert(buf.String(), Matches, `.*previously disabled service old-disabled-svc no longer exists\n.*`)
+}

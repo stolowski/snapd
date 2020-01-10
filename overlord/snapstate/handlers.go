@@ -890,7 +890,7 @@ func (m *SnapManager) undoUnlinkCurrentSnap(t *state.Task, _ *tomb.Tomb) error {
 	}
 
 	snapst.Active = true
-	err = m.backend.LinkSnap(oldInfo, deviceCtx, nil, perfTimings)
+	err = m.backend.LinkSnap(oldInfo, deviceCtx, perfTimings)
 	if err != nil {
 		return err
 	}
@@ -1161,7 +1161,7 @@ func (m *SnapManager) doLinkSnap(t *state.Task, _ *tomb.Tomb) (err error) {
 
 	pb := NewTaskProgressAdapterLocked(t)
 
-	err = m.backend.LinkSnap(newInfo, deviceCtx, nil, perfTimings)
+	err = m.backend.LinkSnap(newInfo, deviceCtx, perfTimings)
 	// defer a cleanup helper which will unlink the snap if anything fails after
 	// this point
 	defer func() {
@@ -1627,6 +1627,17 @@ func (m *SnapManager) startSnapServices(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
+	// check if any previously disabled services are now no longer services and
+	// log messages about that
+	for _, svc := range snapst.LastActiveDisabledServices {
+		app, ok := currentInfo.Apps[svc]
+		if !ok {
+			logger.Noticef("previously disabled service %s no longer exists", svc)
+		} else if !app.IsService() {
+			logger.Noticef("previously disabled service %s is now an app and not a service", svc)
+		}
+	}
+
 	// get the services which should be disabled (not started),
 	// as well as the services which are not present in this revision, but were
 	// present and disabled in a previous one and as such should be kept inside
@@ -1767,8 +1778,8 @@ func (m *SnapManager) stopSnapServices(t *state.Task, _ *tomb.Tomb) error {
 	t.Set("last-active-disabled", disabledServices)
 
 	// add to the disabled services list in snapst services which were disabled
-	// when stop-snap-services ran, for usage across changes like in reverting
-	// and enabling after being disabled.
+	// for usage across changes like in reverting and enabling after being
+	// disabled.
 	// we keep what's already in the list in snapst because that list is
 	// services which were previously present in the snap and disabled, but are
 	// no longer present.

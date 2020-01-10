@@ -92,7 +92,7 @@ func (s *servicesTestSuite) TestAddSnapServicesForSnapdOnCore(c *C) {
 
 	info := makeMockSnapdSnap(c)
 	// add the snapd service
-	err := wrappers.AddSnapServices(info, nil, progress.Null)
+	err := wrappers.AddSnapServices(info, progress.Null)
 	c.Assert(err, IsNil)
 
 	// check that snapd.service is created
@@ -171,7 +171,7 @@ func (s *servicesTestSuite) TestAddSnapServicesForSnapdOnClassic(c *C) {
 
 	info := makeMockSnapdSnap(c)
 	// add the snapd service
-	err := wrappers.AddSnapServices(info, nil, progress.Null)
+	err := wrappers.AddSnapServices(info, progress.Null)
 	c.Assert(err, IsNil)
 
 	// check that snapd services were *not* created

@@ -214,20 +214,9 @@ func StartServices(apps []*snap.AppInfo, disabledSvcs []string, enableBeforeStar
 }
 
 // AddSnapServices adds service units for the applications from the snap which are services.
-func AddSnapServices(s *snap.Info, disabledSvcs []string, inter interacter) (err error) {
+func AddSnapServices(s *snap.Info, inter interacter) (err error) {
 	if s.GetType() == snap.TypeSnapd {
 		return writeSnapdServicesOnCore(s, inter)
-	}
-
-	// check if any previously disabled services are now no longer services and
-	// log messages about that
-	for _, svc := range disabledSvcs {
-		app, ok := s.Apps[svc]
-		if !ok {
-			logger.Noticef("previously disabled service %s no longer exists", svc)
-		} else if !app.IsService() {
-			logger.Noticef("previously disabled service %s is now an app and not a service", svc)
-		}
 	}
 
 	sysd := systemd.New(dirs.GlobalRootDir, systemd.SystemMode, inter)
@@ -290,12 +279,6 @@ func AddSnapServices(s *snap.Info, disabledSvcs []string, inter interacter) (err
 			}
 			written = append(written, path)
 		}
-
-		//if app.Timer != nil || len(app.Sockets) != 0 {
-		// service is socket or timer activated, not during the
-		// boot
-		//	continue
-		//}
 	}
 
 	if len(written) > 0 {
