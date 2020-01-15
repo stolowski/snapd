@@ -17,22 +17,26 @@
  *
  */
 
-package boot
+package boottest
 
 import (
-	"github.com/snapcore/snapd/snap"
+	"os"
+
+	"github.com/snapcore/snapd/boot"
 )
 
-func NewCoreBootParticipant(s snap.PlaceInfo, t snap.Type, dev Device) *coreBootParticipant {
-	bs, err := bootStateFor(t, dev)
-	if err != nil {
-		panic(err)
+// ForceModeenv forces ReadModeenv to always return a specific Modeenv for a
+// given root dir, returning a restore function to reset to the old behavior.
+// If rootdir is empty, then all invocations return the specified modeenv
+func ForceModeenv(rootdir string, m *boot.Modeenv) (restore func()) {
+	mock := func(callerrootdir string) (*boot.Modeenv, error) {
+		if rootdir == "" || callerrootdir == rootdir {
+			return m, nil
+		}
+
+		// all other cases return doesn't exist
+		return nil, os.ErrNotExist
 	}
-	return &coreBootParticipant{s: s, bs: bs}
-}
 
-func NewCoreKernel(s snap.PlaceInfo) *coreKernel {
-	return &coreKernel{s}
+	return boot.MockReadModeenv(mock)
 }
-
-type Trivial = trivial
