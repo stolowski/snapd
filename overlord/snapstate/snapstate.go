@@ -1919,6 +1919,9 @@ func Remove(st *state.State, name string, revision snap.Revision, flags *RemoveF
 		if tp, _ := snapst.Type(); tp == snap.TypeApp && removeAll {
 			if sz, err := EstimateSnapshotSize(st, name); err == nil {
 				if err := osutilCheckFreeSpace(dirs.SnapdVarDir(dirs.GlobalRootDir), uint64(sz)); err != nil {
+					if _, ok := err.(*osutil.NotEnoughDiskSpaceError); ok {
+						return nil, fmt.Errorf("cannot create automatic snapshot when removing last revision of the snap: %v", err)
+					}
 					return nil, err
 				}
 			} // XXX: should we fail if esitmation fails?
