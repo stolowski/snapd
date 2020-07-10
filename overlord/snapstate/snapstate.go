@@ -1917,6 +1917,12 @@ func Remove(st *state.State, name string, revision snap.Revision, flags *RemoveF
 	// 'purge' flag disables automatic snapshot for given remove op
 	if flags == nil || !flags.Purge {
 		if tp, _ := snapst.Type(); tp == snap.TypeApp && removeAll {
+			if sz, err := EstimateSnapshotSize(st, name); err == nil {
+				if err := osutilCheckFreeSpace(dirs.SnapdVarDir(dirs.GlobalRootDir), uint64(sz)); err != nil {
+					return nil, err
+				}
+			} // XXX: should we fail if esitmation fails?
+
 			ts, err := AutomaticSnapshot(st, name)
 			if err == nil {
 				addNext(ts)
