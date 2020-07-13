@@ -29,12 +29,12 @@ import (
 var syscallStatfs = syscall.Statfs
 
 type NotEnoughDiskSpaceError struct {
-	Path string
+	Path  string
 	Delta int64
 }
 
 func (e *NotEnoughDiskSpaceError) Error() string {
-	return fmt.Sprintf("not enough free space in %s, requires %s more", e.Path, strutil.SizeToStr(e.Delta))
+	return fmt.Sprintf("insufficient space in %q, at least %s more is required", e.Path, strutil.SizeToStr(e.Delta))
 }
 
 // diskFree returns free disk space for the given path
