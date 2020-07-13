@@ -162,8 +162,10 @@ func Filename(snapshot *client.Snapshot) string {
 // for automatic snapshots at the moment.
 func EstimateSnapshotSize(si *snap.Info) (int64, error) {
 	var total int64
-	calculateSize := func(path string, info os.FileInfo, err error) error {
-		total += info.Size()
+	calculateSize := func(path string, finfo os.FileInfo, err error) error {
+		if finfo.Mode().IsRegular() {
+			total += finfo.Size()
+		}
 		return err
 	}
 
