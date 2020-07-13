@@ -157,7 +157,7 @@ func Filename(snapshot *client.Snapshot) string {
 	return filepath.Join(dirs.SnapshotsDir, fmt.Sprintf("%d_%s_%s_%s.zip", snapshot.SetID, snapshot.Snap, snapshot.Version, snapshot.Revision))
 }
 
-// Estimate size of the snapshote.
+// EstimateSnapshotSize calculates estimated size of the snapshot.
 // XXX: this doesn't take users into account yet, because it is used only
 // for automatic snapshots at the moment.
 func EstimateSnapshotSize(si *snap.Info) (int64, error) {
@@ -208,6 +208,7 @@ func EstimateSnapshotSize(si *snap.Info) (int64, error) {
 	// XXX: if we want to support users, then we need to iterate over them,
 	// similiarly to Save() below.
 
+	// XXX: we could use a typical compression factor here
 	return total, nil
 }
 
