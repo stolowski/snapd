@@ -1,4 +1,8 @@
-summary: TODO
+summary: Check that basic snap operation are aware of low disk space.
+
+description: |
+  Check that operations such as snap installation or snap removal (with an
+  automatic snapshot) error out early if there is not enough disk space.
 
 environment:
   TMPFSMOUNT: /var/lib/snapd
@@ -7,8 +11,6 @@ prepare: |
   systemctl stop snapd.{socket,service}
 
   # mount /var/lib/snapd on a tmpfs
-  #cp -ar "$TMPFSMOUNT" "$TMPFSMOUNT.real"
-  #rm -f "$TMPFSMOUNT"/*
   mount -t tmpfs tmpfs -o size=500M,mode=0755 "$TMPFSMOUNT"
 
   systemctl start snapd.{socket,service}
@@ -16,8 +18,6 @@ prepare: |
 restore: |
   systemctl stop snapd.{socket,service}
   umount -l "$TMPFSMOUNT"
-  #rmdir "$TMPFSMOUNT"
-  #mv "$TMPFSMOUNT.real" "$TMPFSMOUNT"
   systemctl start snapd.{socket,service}
 
 execute: |
@@ -35,7 +35,7 @@ execute: |
   echo "Snap download fails with little disk space"
   NEWSIZE=$(expr $(get_disk_usage) + 1)
   resize "${NEWSIZE}M"
-  snap install hello-world 2>&1 | MATCH "Ensure prerequisites for \"hello-world\" are available \(cannot install snap base \"core\": not enough free space in /var/lib/snapd, requires .*\)"
+  snap install hello-world 2>&1 | MATCH "Ensure prerequisites for \"hello-world\" are available \(cannot install snap base \"core\": insufficient space in \"/var/lib/snapd\", at least .* more is required\)"
 
   # note, installing hello-world also pulls core snap.
   echo "And succeeds with enough space"
@@ -58,5 +58,4 @@ execute: |
   fi
   
   MATCH "error: cannot remove \"hello-world\": cannot create automatic snapshot when" < error.txt
-  MATCH "removing last revision of the snap: not enough free space in" < error.txt
-
+  MATCH "removing last revision of the snap: insufficient space in" < error.txt
