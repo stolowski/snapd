@@ -99,7 +99,7 @@ func (s *snapmgrTestSuite) SetUpTest(c *C) {
 	s.state = s.o.State()
 
 	s.BaseTest.AddCleanup(snap.MockSanitizePlugsSlots(func(snapInfo *snap.Info) {}))
-	
+
 	restoreCheckFreeSpace := snapstate.MockOsutilCheckFreeSpace(func(string, uint64) error { return nil })
 	s.AddCleanup(restoreCheckFreeSpace)
 

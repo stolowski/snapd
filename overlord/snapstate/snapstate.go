@@ -176,7 +176,9 @@ func doInstall(st *state.State, snapst *SnapState, snapsup *SnapSetup, flags int
 	} else {
 		// XXX: DownloadInfo should never be nil, except for missing mocking in tests?
 		if snapsup.DownloadInfo != nil {
-			if err := osutilCheckFreeSpace(dirs.SnapdVarDir(dirs.GlobalRootDir), uint64(snapsup.DownloadInfo.Size)); err != nil {
+			// require 10% extra + 1Mb
+			requiredSpace := uint64(snapsup.DownloadInfo.Size) + uint64(0.1 * float64(snapsup.DownloadInfo.Size)) + 1024*1024
+			if err := osutilCheckFreeSpace(dirs.SnapdVarDir(dirs.GlobalRootDir), requiredSpace); err != nil {
 				return nil, err
 			}
 		}
