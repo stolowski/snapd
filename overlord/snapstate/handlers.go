@@ -1875,6 +1875,59 @@ func (m *SnapManager) doUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 	return err
 }
 
+func (m *SnapManager) undoUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
+	st := t.State()
+	st.Lock()
+	defer st.Unlock()
+
+	perfTimings := state.TimingsForTask(t)
+	defer perfTimings.Save(st)
+
+	snapsup, snapst, err := snapSetupAndState(t)
+	if err != nil {
+		return err
+	}
+
+	// XXX: is it safe (can panic)?
+	isInstalled := snapst.IsInstalled()
+	if !isInstalled {
+		return fmt.Errorf("internal error: snap %q not installed", snapsup.InstanceName())
+	}
+
+	cand := snapsup.SideInfo
+	// for testing
+	m.backend.Candidate(cand)
+
+	info, err := readInfo(snapsup.InstanceName(), cand, 0)
+	if err != nil {
+		return err
+	}
+	
+	deviceCtx, err := DeviceCtx(st, t, nil)
+	if err != nil {
+		return err
+	}
+
+	linkCtx := backend.LinkContext{
+		FirstInstall:         false,
+		// XXX: vitality rank?
+	}
+	reboot, err := m.backend.LinkSnap(info, deviceCtx, linkCtx, perfTimings)
+	if err != nil {
+		return err
+	}
+
+	// mark as active
+	snapst.Active = true
+	Set(st, snapsup.InstanceName(), snapst)
+
+	// if we just linked back a core snap, request a restart
+	// so that we switch executing its snapd.
+	m.maybeRestart(t, info, reboot, deviceCtx)
+
+	return nil
+}
+
 func (m *SnapManager) doClearSnapData(t *state.Task, _ *tomb.Tomb) error {
 	st := t.State()
 	st.Lock()
