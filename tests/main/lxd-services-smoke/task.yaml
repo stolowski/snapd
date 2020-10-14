@@ -14,7 +14,15 @@ execute: |
   snap install lxd
   snap stop lxd
   snap start lxd
+
+  ls -l /snap/lxd
+  snap list --all lxd
+
   # TODO: this may fail if revision is same as stable
   snap refresh --edge lxd
+
+  ls -l /snap/lxd
+  snap list --all lxd
+
   # XXX: this (always?) fails
   snap remove lxd --purge

@@ -1888,17 +1888,25 @@ func (m *SnapManager) undoUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
+	t.Logf("current in state: %d", snapst.Current)
+	t.Logf("revision in snapsup: %d", snapsup.SideInfo.Revision)
+
 	// XXX: is it safe (can panic)?
 	isInstalled := snapst.IsInstalled()
 	if !isInstalled {
 		return fmt.Errorf("internal error: snap %q not installed", snapsup.InstanceName())
 	}
 
-	cand := snapsup.SideInfo
+	/*cand := snapsup.SideInfo
 	// for testing
 	m.backend.Candidate(cand)
 
 	info, err := readInfo(snapsup.InstanceName(), cand, 0)
+	if err != nil {
+		return err
+	}*/
+
+	info, err := snapst.CurrentInfo()
 	if err != nil {
 		return err
 	}
