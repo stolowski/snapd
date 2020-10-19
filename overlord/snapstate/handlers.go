@@ -33,6 +33,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/snapcore/snapd/boot"
+	"github.com/snapcore/snapd/cmd/snaplock/runinhibit"
 	"github.com/snapcore/snapd/dirs"
 	"github.com/snapcore/snapd/features"
 	"github.com/snapcore/snapd/i18n"
@@ -833,17 +834,15 @@ func (m *SnapManager) doUnlinkCurrentSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	if experimentalRefreshAppAwareness {
-		// A process may be created after the soft refresh done upon
-		// the request to refresh a snap. If such process is alive by
-		// the time this code is reached the refresh process is stopped.
-		// In case of failure the snap state is modified to indicate
-		// when the refresh was first inhibited. If the first
-		// inhibition is outside of a grace period then refresh
-		// proceeds regardless of the existing processes.
-		if err := inhibitRefresh(st, snapst, oldInfo, HardNothingRunningRefreshCheck); err != nil {
+	if experimentalRefreshAppAwareness && !snapsup.Flags.IgnoreRunning {
+		// Invoke the hard refresh flow. Upon success the returned lock will be
+		// held to prevent snap-run from advancing until UnlinkSnap, executed
+		// below, completes.
+		lock, err := hardEnsureNothingRunningDuringRefresh(m.backend, st, snapst, oldInfo)
+		if err != nil {
 			return err
 		}
+		defer lock.Close()
 	}
 
 	snapst.Active = false
@@ -851,6 +850,9 @@ func (m *SnapManager) doUnlinkCurrentSnap(t *state.Task, _ *tomb.Tomb) error {
 	// do the final unlink
 	linkCtx := backend.LinkContext{
 		FirstInstall: false,
+		// This task is only used for unlinking a snap during refreshes so we
+		// can safely hard-code this condition here.
+		RunInhibitHint: runinhibit.HintInhibitedForRefresh,
 	}
 	err = m.backend.UnlinkSnap(oldInfo, linkCtx, NewTaskProgressAdapterLocked(t))
 	if err != nil {
@@ -1888,23 +1890,11 @@ func (m *SnapManager) undoUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
-	t.Logf("current in state: %d", snapst.Current)
-	t.Logf("revision in snapsup: %d", snapsup.SideInfo.Revision)
-
 	// XXX: is it safe (can panic)?
 	isInstalled := snapst.IsInstalled()
 	if !isInstalled {
 		return fmt.Errorf("internal error: snap %q not installed", snapsup.InstanceName())
 	}
-
-	/*cand := snapsup.SideInfo
-	// for testing
-	m.backend.Candidate(cand)
-
-	info, err := readInfo(snapsup.InstanceName(), cand, 0)
-	if err != nil {
-		return err
-	}*/
 
 	info, err := snapst.CurrentInfo()
 	if err != nil {
@@ -1916,9 +1906,13 @@ func (m *SnapManager) undoUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 
+	vitalityRank, err := vitalityRank(st, snapsup.InstanceName())
+	if err != nil {
+		return err
+	}
 	linkCtx := backend.LinkContext{
 		FirstInstall:         false,
-		// XXX: vitality rank?
+		VitalityRank: vitalityRank,
 	}
 	reboot, err := m.backend.LinkSnap(info, deviceCtx, linkCtx, perfTimings)
 	if err != nil {
@@ -1928,6 +1922,7 @@ func (m *SnapManager) undoUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 	// mark as active
 	snapst.Active = true
 	Set(st, snapsup.InstanceName(), snapst)
+	t.SetStatus(state.DoneStatus)
 
 	// if we just linked back a core snap, request a restart
 	// so that we switch executing its snapd.
@@ -1953,13 +1948,17 @@ func (m *SnapManager) doClearSnapData(t *state.Task, _ *tomb.Tomb) error {
 	}
 
 	if err = m.backend.RemoveSnapData(info); err != nil {
-		return err
+		st.Lock()
+		t.Logf("Cannot remove snap data: %v", err)
+		st.Unlock()
 	}
 
 	if len(snapst.Sequence) == 1 {
 		// Only remove data common between versions if this is the last version
 		if err = m.backend.RemoveSnapCommonData(info); err != nil {
-			return err
+			st.Lock()
+			t.Logf("Cannot remove common snap data: %v", err)
+			st.Unlock()
 		}
 
 		st.Lock()
@@ -1971,7 +1970,7 @@ func (m *SnapManager) doClearSnapData(t *state.Task, _ *tomb.Tomb) error {
 		}
 		// Snap data directory can be removed now too
 		if err := m.backend.RemoveSnapDataDir(info, otherInstances); err != nil {
-			return err
+			t.Logf("Cannot remove common snap data directory: %v", err)
 		}
 	}
 
@@ -2035,6 +2034,10 @@ func (m *SnapManager) doDiscardSnap(t *state.Task, _ *tomb.Tomb) error {
 		if err != nil {
 			t.Errorf("cannot discard snap namespace %q, will retry in 3 mins: %s", snapsup.InstanceName(), err)
 			return &state.Retry{After: 3 * time.Minute}
+		}
+		err = m.backend.RemoveSnapInhibitLock(snapsup.InstanceName())
+		if err != nil {
+			return err
 		}
 		if err := m.removeSnapCookie(st, snapsup.InstanceName()); err != nil {
 			return fmt.Errorf("cannot remove snap cookie: %v", err)

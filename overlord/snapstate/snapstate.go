@@ -174,10 +174,11 @@ func doInstall(st *state.State, snapst *SnapState, snapsup *SnapSetup, flags int
 		}
 		snapsup.PlugsOnly = snapsup.PlugsOnly && (len(info.Slots) == 0)
 
-		if experimentalRefreshAppAwareness {
-			// Note that because we are modifying the snap state this block
-			// must be located after the conflict check done above.
-			if err := inhibitRefresh(st, snapst, info, SoftNothingRunningRefreshCheck); err != nil {
+		if experimentalRefreshAppAwareness && !snapsup.Flags.IgnoreRunning {
+			// Note that because we are modifying the snap state inside
+			// softCheckNothingRunningForRefresh, this block must be located
+			// after the conflict check done above.
+			if err := softCheckNothingRunningForRefresh(st, snapst, info); err != nil {
 				return nil, err
 			}
 		}
@@ -2130,7 +2131,8 @@ func removeTasks(st *state.State, name string, revision snap.Revision, flags *Re
 				addNext(removeInactiveRevision(st, name, info.SnapID, si.Revision))
 			}
 		}
-		// tasks for removing current revision of the snap are last
+		// add tasks for removing the current revision last,
+		// this is then also when common data will be removed
 		if currentIndex >= 0 {
 			addNext(removeInactiveRevision(st, name, info.SnapID, seq[currentIndex].Revision))
 		}
@@ -2416,6 +2418,9 @@ func Get(st *state.State, name string, snapst *SnapState) error {
 	if !ok {
 		return state.ErrNoState
 	}
+
+	// XXX: &snapst pointer isn't needed here but it is likely historical
+	// (a bug in old JSON marshaling probably).
 	err = json.Unmarshal([]byte(*raw), &snapst)
 	if err != nil {
 		return fmt.Errorf("cannot unmarshal snap state: %v", err)
