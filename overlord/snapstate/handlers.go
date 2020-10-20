@@ -1900,7 +1900,7 @@ func (m *SnapManager) undoUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 	if err != nil {
 		return err
 	}
-	
+
 	deviceCtx, err := DeviceCtx(st, t, nil)
 	if err != nil {
 		return err
@@ -1911,7 +1911,7 @@ func (m *SnapManager) undoUnlinkSnap(t *state.Task, _ *tomb.Tomb) error {
 		return err
 	}
 	linkCtx := backend.LinkContext{
-		FirstInstall:         false,
+		FirstInstall: false,
 		VitalityRank: vitalityRank,
 	}
 	reboot, err := m.backend.LinkSnap(info, deviceCtx, linkCtx, perfTimings)
