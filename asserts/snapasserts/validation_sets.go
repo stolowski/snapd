@@ -486,6 +486,7 @@ func (v *ValidationSets) CheckPresenceRequired(snapRef naming.SnapRef) ([]string
 		return nil, unspecifiedRevision, &PresenceConstraintError{snapRef.SnapName(), cstrs.presence}
 	}
 	if cstrs.presence != asserts.PresenceRequired {
+		// optional presence
 		return nil, unspecifiedRevision, nil
 	}
 
@@ -498,7 +499,6 @@ func (v *ValidationSets) CheckPresenceRequired(snapRef naming.SnapRef) ([]string
 			// it wasn't already determined. Note that if revisions are set,
 			// then they are the same, otherwise validation sets would be in
 			// conflict.
-			// This is an equivalent of 'if rev != unspecifiedRevision`.
 			if snapRev == unspecifiedRevision {
 				snapRev = rev
 			}
